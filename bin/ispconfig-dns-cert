@@ -1,0 +1,81 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Acme\AcmeManager;
+use App\Certificate\CertificateFactory;
+use App\Command\DoctorCommand;
+use App\Command\IssueCertificateCommand;
+use App\Command\PreviewCertificateCommand;
+use App\Config\Configuration;
+use App\ISPConfig\ApiClient;
+use App\ISPConfig\WebsiteRepository;
+use App\Process\ProcessRunner;
+use App\Service\CertificateService;
+use App\Service\DoctorService;
+use Symfony\Component\Console\Application;
+use Symfony\Component\HttpClient\HttpClient;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$configuration = Configuration::fromFile(
+        '/etc/ispconfig-dns-cert.php',
+);
+
+$apiClient = new ApiClient(
+        httpClient: HttpClient::create(),
+        configuration: $configuration,
+);
+
+$processRunner = new ProcessRunner();
+
+$websiteRepository = new WebsiteRepository(
+        apiClient: $apiClient,
+);
+
+$certificateFactory = new CertificateFactory();
+
+$acmeManager = new AcmeManager(
+        configuration: $configuration,
+        processRunner: $processRunner,
+);
+
+$certificateService = new CertificateService(
+        websiteRepository: $websiteRepository,
+        certificateFactory: $certificateFactory,
+        acmeManager: $acmeManager,
+);
+
+$doctorService = new DoctorService(
+        configuration: $configuration,
+        apiClient: $apiClient,
+        processRunner: $processRunner,
+);
+
+$application = new Application(
+        name: 'ISPConfig DNS Certificate Manager',
+        version: '0.3.0',
+);
+
+$application->add(
+        new PreviewCertificateCommand(
+                certificateService: $certificateService,
+                apiClient: $apiClient,
+        ),
+);
+
+$application->add(
+        new IssueCertificateCommand(
+                certificateService: $certificateService,
+                apiClient: $apiClient,
+        ),
+);
+
+$application->add(
+        new DoctorCommand(
+                doctorService: $doctorService,
+        ),
+);
+
+exit($application->run());
