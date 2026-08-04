@@ -1,8 +1,38 @@
 {
-    "name": "harz-web24/ispconfig-dns-cert",
-    "description": "Automatic Let's Encrypt DNS-01 certificate management for ISPConfig",
+    "name": "jensen1206/ispconfig-acme-manager",
+    "description": "Modern ACME certificate manager for ISPConfig with DNS-01 support.",
     "type": "project",
     "license": "MIT",
+    "keywords": [
+        "ispconfig",
+        "acme",
+        "letsencrypt",
+        "dns-01",
+        "certificate",
+        "ssl",
+        "automation",
+        "symfony",
+        "php",
+        "cli"
+    ],
+    "homepage": "https://github.com/jensen1206/ispconfig-acme-manager",
+    "support": {
+        "issues": "https://github.com/jensen1206/ispconfig-acme-manager/issues",
+        "source": "https://github.com/jensen1206/ispconfig-acme-manager"
+    },
+    "authors": [
+        {
+            "name": "Jens Wiecker",
+            "homepage": "https://wiecker.eu",
+            "role": "Maintainer"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/jensen1206/ispconfig-acme-manager.git"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "symfony/console": "^7.4",
@@ -28,10 +58,15 @@
     },
     "scripts": {
         "fix": "php-cs-fixer fix",
-        "lint": "parallel-lint src tests",
+        "lint": "parallel-lint src tests bin",
         "stan": "phpstan analyse",
         "rector": "rector process",
-        "test": "phpunit"
+        "test": "phpunit",
+        "check": [
+            "@lint",
+            "@stan",
+            "@test"
+        ]
     },
     "config": {
         "sort-packages": true,
