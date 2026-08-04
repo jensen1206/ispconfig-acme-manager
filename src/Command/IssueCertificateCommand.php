@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Command;
 
 use App\Domain\Hostname;
@@ -13,7 +11,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Throwable;
 
 final class IssueCertificateCommand extends Command
 {
@@ -58,7 +55,7 @@ final class IssueCertificateCommand extends Command
         try {
             $domain = $input->getArgument('domain');
 
-            if (!is_string($domain)) {
+            if (!\is_string($domain)) {
                 $io->error(
                     'Das Argument "domain" muss eine Zeichenkette sein.',
                 );
@@ -77,24 +74,19 @@ final class IssueCertificateCommand extends Command
             $io->definitionList(
                 ['Domain' => $plan->website->domain()],
                 [
-                    'Hostnamen' =>
-                        implode(', ', $plan->certificate->hostnameValues()),
+                    'Hostnamen' => implode(', ', $plan->certificate->hostnameValues()),
                 ],
                 [
-                    'Wildcard' =>
-                        $plan->certificate->containsWildcard() ? 'ja' : 'nein',
+                    'Wildcard' => $plan->certificate->containsWildcard() ? 'ja' : 'nein',
                 ],
                 [
-                    'Ziel-Key' =>
-                        $plan->certificate->keyPath,
+                    'Ziel-Key' => $plan->certificate->keyPath,
                 ],
                 [
-                    'Ziel-Zertifikat' =>
-                        $plan->certificate->certificatePath,
+                    'Ziel-Zertifikat' => $plan->certificate->certificatePath,
                 ],
                 [
-                    'Erzwungene Ausstellung' =>
-                        $force ? 'ja' : 'nein',
+                    'Erzwungene Ausstellung' => $force ? 'ja' : 'nein',
                 ],
             );
 
@@ -120,23 +112,17 @@ final class IssueCertificateCommand extends Command
             $certificate = $result['plan']->certificate;
 
             if (!is_file($certificate->keyPath)) {
-                throw new \RuntimeException(sprintf(
-                    'Der installierte Schlüssel wurde nicht gefunden: %s',
-                    $certificate->keyPath,
-                ));
+                throw new \RuntimeException(\sprintf('Der installierte Schlüssel wurde nicht gefunden: %s', $certificate->keyPath));
             }
 
             if (!is_file($certificate->certificatePath)) {
-                throw new \RuntimeException(sprintf(
-                    'Das installierte Zertifikat wurde nicht gefunden: %s',
-                    $certificate->certificatePath,
-                ));
+                throw new \RuntimeException(\sprintf('Das installierte Zertifikat wurde nicht gefunden: %s', $certificate->certificatePath));
             }
 
             $io->success([
                 'Zertifikat wurde ausgestellt und installiert.',
-                sprintf('Key: %s', $certificate->keyPath),
-                sprintf(
+                \sprintf('Key: %s', $certificate->keyPath),
+                \sprintf(
                     'Zertifikat: %s',
                     $certificate->certificatePath,
                 ),
@@ -145,12 +131,12 @@ final class IssueCertificateCommand extends Command
             if ($result['plan']->website->letsEncryptEnabled) {
                 $io->warning(
                     'ISPConfig Let’s Encrypt ist für diese Website noch aktiviert. '
-                    . 'Das deaktivieren wir im nächsten Schritt automatisch über die API.',
+                    .'Das deaktivieren wir im nächsten Schritt automatisch über die API.',
                 );
             }
 
             return Command::SUCCESS;
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;

@@ -1,10 +1,6 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\ISPConfig;
-
-use RuntimeException;
 
 final readonly class ClientIdResolver
 {
@@ -20,10 +16,7 @@ final readonly class ClientIdResolver
             $website->systemGroup,
             $matches,
         )) {
-            throw new RuntimeException(sprintf(
-                'Aus der Systemgruppe "%s" konnte keine Client-ID ermittelt werden.',
-                $website->systemGroup,
-            ));
+            throw new \RuntimeException(\sprintf('Aus der Systemgruppe "%s" konnte keine Client-ID ermittelt werden.', $website->systemGroup));
         }
 
         $clientId = (int) $matches[1];
@@ -35,20 +28,14 @@ final readonly class ClientIdResolver
             ],
         );
 
-        if (!is_array($result) || $result === []) {
-            throw new RuntimeException(sprintf(
-                'ISPConfig-Client %d wurde nicht gefunden.',
-                $clientId,
-            ));
+        if (!\is_array($result) || [] === $result) {
+            throw new \RuntimeException(\sprintf('ISPConfig-Client %d wurde nicht gefunden.', $clientId));
         }
 
         $returnedClientId = $result['client_id'] ?? null;
 
         if (!$this->numericValueEquals($returnedClientId, $clientId)) {
-            throw new RuntimeException(sprintf(
-                'ISPConfig hat für Client %d eine unerwartete Antwort geliefert.',
-                $clientId,
-            ));
+            throw new \RuntimeException(\sprintf('ISPConfig hat für Client %d eine unerwartete Antwort geliefert.', $clientId));
         }
 
         return $clientId;
@@ -56,11 +43,11 @@ final readonly class ClientIdResolver
 
     private function numericValueEquals(mixed $value, int $expected): bool
     {
-        if (is_int($value)) {
+        if (\is_int($value)) {
             return $value === $expected;
         }
 
-        return is_string($value)
+        return \is_string($value)
             && ctype_digit($value)
             && (int) $value === $expected;
     }

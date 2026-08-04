@@ -1,11 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Certificate;
 
 use App\Domain\Hostname;
-use InvalidArgumentException;
 
 final readonly class Certificate
 {
@@ -20,43 +17,31 @@ final readonly class Certificate
         public CertificateAuthority $certificateAuthority,
         public ChallengeType $challengeType,
     ) {
-        if ($this->hostnames === []) {
-            throw new InvalidArgumentException(
-                'Ein Zertifikat benötigt mindestens einen Hostnamen.',
-            );
+        if ([] === $this->hostnames) {
+            throw new \InvalidArgumentException('Ein Zertifikat benötigt mindestens einen Hostnamen.');
         }
 
         if (!$this->containsHostname($this->primaryHostname)) {
-            throw new InvalidArgumentException(
-                'Der primäre Hostname muss in der Hostnamenliste enthalten sein.',
-            );
+            throw new \InvalidArgumentException('Der primäre Hostname muss in der Hostnamenliste enthalten sein.');
         }
 
-        if (trim($this->keyPath) === '') {
-            throw new InvalidArgumentException(
-                'Der Zielpfad für den privaten Schlüssel darf nicht leer sein.',
-            );
+        if ('' === trim($this->keyPath)) {
+            throw new \InvalidArgumentException('Der Zielpfad für den privaten Schlüssel darf nicht leer sein.');
         }
 
-        if (trim($this->certificatePath) === '') {
-            throw new InvalidArgumentException(
-                'Der Zielpfad für das Zertifikat darf nicht leer sein.',
-            );
+        if ('' === trim($this->certificatePath)) {
+            throw new \InvalidArgumentException('Der Zielpfad für das Zertifikat darf nicht leer sein.');
         }
 
-        if (trim($this->acmeDirectory) === '') {
-            throw new InvalidArgumentException(
-                'Das ACME-Verzeichnis darf nicht leer sein.',
-            );
+        if ('' === trim($this->acmeDirectory)) {
+            throw new \InvalidArgumentException('Das ACME-Verzeichnis darf nicht leer sein.');
         }
 
         if (
             $this->containsWildcard()
-            && $this->challengeType !== ChallengeType::Dns01
+            && ChallengeType::Dns01 !== $this->challengeType
         ) {
-            throw new InvalidArgumentException(
-                'Wildcard-Zertifikate benötigen die DNS-01-Challenge.',
-            );
+            throw new \InvalidArgumentException('Wildcard-Zertifikate benötigen die DNS-01-Challenge.');
         }
     }
 
@@ -89,7 +74,7 @@ final readonly class Certificate
 
     public function acmeCertificatePath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.cer',
             rtrim($this->acmeDirectory, '/'),
             $this->domain(),
@@ -98,7 +83,7 @@ final readonly class Certificate
 
     public function acmeKeyPath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.key',
             rtrim($this->acmeDirectory, '/'),
             $this->domain(),
@@ -107,12 +92,12 @@ final readonly class Certificate
 
     public function acmeBundlePath(): string
     {
-        return rtrim($this->acmeDirectory, '/') . '/ca.cer';
+        return rtrim($this->acmeDirectory, '/').'/ca.cer';
     }
 
     public function acmeFullChainPath(): string
     {
-        return rtrim($this->acmeDirectory, '/') . '/fullchain.cer';
+        return rtrim($this->acmeDirectory, '/').'/fullchain.cer';
     }
 
     private function containsHostname(Hostname $expected): bool

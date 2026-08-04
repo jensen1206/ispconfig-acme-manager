@@ -1,13 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Domain;
 
-use InvalidArgumentException;
-use Stringable;
-
-final readonly class Hostname implements Stringable
+final readonly class Hostname implements \Stringable
 {
     private string $value;
 
@@ -49,18 +44,12 @@ final readonly class Hostname implements Stringable
 
     private function assertValid(string $value): void
     {
-        if ($value === '' || strlen($value) > 253) {
-            throw new InvalidArgumentException(sprintf(
-                'Ungültiger Hostname "%s".',
-                $value,
-            ));
+        if ('' === $value || \strlen($value) > 253) {
+            throw new \InvalidArgumentException(\sprintf('Ungültiger Hostname "%s".', $value));
         }
 
         if (str_contains($value, '*') && !str_starts_with($value, '*.')) {
-            throw new InvalidArgumentException(sprintf(
-                'Ein Wildcard-Hostname muss mit "*." beginnen: "%s".',
-                $value,
-            ));
+            throw new \InvalidArgumentException(\sprintf('Ein Wildcard-Hostname muss mit "*." beginnen: "%s".', $value));
         }
 
         $domain = $this->isWildcardValue($value)
@@ -68,16 +57,13 @@ final readonly class Hostname implements Stringable
             : $value;
 
         if (
-            filter_var(
+            false === filter_var(
                 $domain,
-                FILTER_VALIDATE_DOMAIN,
-                FILTER_FLAG_HOSTNAME,
-            ) === false
+                \FILTER_VALIDATE_DOMAIN,
+                \FILTER_FLAG_HOSTNAME,
+            )
         ) {
-            throw new InvalidArgumentException(sprintf(
-                'Ungültiger Hostname "%s".',
-                $value,
-            ));
+            throw new \InvalidArgumentException(\sprintf('Ungültiger Hostname "%s".', $value));
         }
     }
 

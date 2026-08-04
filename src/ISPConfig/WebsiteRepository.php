@@ -1,11 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\ISPConfig;
 
 use App\Domain\Hostname;
-use InvalidArgumentException;
 
 final readonly class WebsiteRepository
 {
@@ -27,18 +24,15 @@ final readonly class WebsiteRepository
             ],
         );
 
-        if (!is_array($result) || $result === []) {
-            throw new ApiException(sprintf(
-                'Für die Domain "%s" wurde keine aktive ISPConfig-Website gefunden.',
-                $hostname->value(),
-            ));
+        if (!\is_array($result) || [] === $result) {
+            throw new ApiException(\sprintf('Für die Domain "%s" wurde keine aktive ISPConfig-Website gefunden.', $hostname->value()));
         }
 
         /*
          * Je nach ISPConfig-Version liefert die API entweder direkt einen
          * einzelnen Datensatz oder eine Liste mit Datensätzen.
          */
-        if (array_key_exists('domain_id', $result)) {
+        if (\array_key_exists('domain_id', $result)) {
             return $this->createWebsite(
                 $this->normalizeStringKeyedArray($result),
             );
@@ -46,11 +40,8 @@ final readonly class WebsiteRepository
 
         $first = reset($result);
 
-        if (!is_array($first)) {
-            throw new ApiException(sprintf(
-                'Die ISPConfig-Antwort für "%s" hat eine unerwartete Struktur.',
-                $hostname->value(),
-            ));
+        if (!\is_array($first)) {
+            throw new ApiException(\sprintf('Die ISPConfig-Antwort für "%s" hat eine unerwartete Struktur.', $hostname->value()));
         }
 
         return $this->createWebsite(
@@ -61,9 +52,7 @@ final readonly class WebsiteRepository
     public function findById(int $id): Website
     {
         if ($id <= 0) {
-            throw new InvalidArgumentException(
-                'Die Website-ID muss größer als 0 sein.',
-            );
+            throw new \InvalidArgumentException('Die Website-ID muss größer als 0 sein.');
         }
 
         $data = $this->apiClient->request(
@@ -73,11 +62,8 @@ final readonly class WebsiteRepository
             ],
         );
 
-        if (!is_array($data) || !array_key_exists('domain_id', $data)) {
-            throw new ApiException(sprintf(
-                'Die Website mit der ID %d wurde nicht gefunden.',
-                $id,
-            ));
+        if (!\is_array($data) || !\array_key_exists('domain_id', $data)) {
+            throw new ApiException(\sprintf('Die Website mit der ID %d wurde nicht gefunden.', $id));
         }
 
         return $this->createWebsite(
@@ -125,13 +111,13 @@ final readonly class WebsiteRepository
         switch ($subdomain) {
             case 'www':
                 $hostnames[] = new Hostname(
-                    'www.' . $primaryHostname->value(),
+                    'www.'.$primaryHostname->value(),
                 );
                 break;
 
             case '*':
                 $hostnames[] = new Hostname(
-                    '*.' . $primaryHostname->value(),
+                    '*.'.$primaryHostname->value(),
                 );
                 break;
 
@@ -141,11 +127,7 @@ final readonly class WebsiteRepository
                 break;
 
             default:
-                throw new ApiException(sprintf(
-                    'Unbekannte ISPConfig-Subdomain-Einstellung "%s" für %s.',
-                    $subdomain,
-                    $primaryHostname->value(),
-                ));
+                throw new ApiException(\sprintf('Unbekannte ISPConfig-Subdomain-Einstellung "%s" für %s.', $subdomain, $primaryHostname->value()));
         }
 
         return $hostnames;
@@ -158,11 +140,8 @@ final readonly class WebsiteRepository
     {
         $value = $data[$key] ?? null;
 
-        if (!is_string($value) || trim($value) === '') {
-            throw new ApiException(sprintf(
-                'Das Pflichtfeld "%s" fehlt in der ISPConfig-Antwort.',
-                $key,
-            ));
+        if (!\is_string($value) || '' === trim($value)) {
+            throw new ApiException(\sprintf('Das Pflichtfeld "%s" fehlt in der ISPConfig-Antwort.', $key));
         }
 
         return trim($value);
@@ -175,15 +154,12 @@ final readonly class WebsiteRepository
     {
         $value = $data[$key] ?? null;
 
-        if ($value === null) {
+        if (null === $value) {
             return null;
         }
 
-        if (!is_string($value)) {
-            throw new ApiException(sprintf(
-                'Das Feld "%s" hat einen unerwarteten Datentyp.',
-                $key,
-            ));
+        if (!\is_string($value)) {
+            throw new ApiException(\sprintf('Das Feld "%s" hat einen unerwarteten Datentyp.', $key));
         }
 
         return trim($value);
@@ -196,23 +172,20 @@ final readonly class WebsiteRepository
     {
         $value = $data[$key] ?? null;
 
-        if (is_int($value)) {
+        if (\is_int($value)) {
             return $value;
         }
 
-        if (is_string($value) && ctype_digit($value)) {
+        if (\is_string($value) && ctype_digit($value)) {
             return (int) $value;
         }
 
-        throw new ApiException(sprintf(
-            'Das Pflichtfeld "%s" fehlt oder ist keine gültige Zahl.',
-            $key,
-        ));
+        throw new ApiException(\sprintf('Das Pflichtfeld "%s" fehlt oder ist keine gültige Zahl.', $key));
     }
 
     private function yesNoToBool(mixed $value): bool
     {
-        return $value === 'y';
+        return 'y' === $value;
     }
 
     /**
@@ -225,10 +198,8 @@ final readonly class WebsiteRepository
         $normalized = [];
 
         foreach ($data as $key => $value) {
-            if (!is_string($key)) {
-                throw new ApiException(
-                    'Die ISPConfig-Antwort enthält einen ungültigen Array-Schlüssel.',
-                );
+            if (!\is_string($key)) {
+                throw new ApiException('Die ISPConfig-Antwort enthält einen ungültigen Array-Schlüssel.');
             }
 
             $normalized[$key] = $value;

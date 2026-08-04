@@ -1,13 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
 use App\Config\Configuration;
 use App\ISPConfig\ApiClient;
 use App\Process\ProcessRunner;
-use Throwable;
 
 final readonly class DoctorService
 {
@@ -39,16 +36,16 @@ final readonly class DoctorService
 
     private function checkPhpVersion(): DoctorCheck
     {
-        $successful = version_compare(PHP_VERSION, '8.2.0', '>=');
+        $successful = version_compare(\PHP_VERSION, '8.2.0', '>=');
 
         return new DoctorCheck(
             name: 'PHP-Version',
             successful: $successful,
             message: $successful
-                ? sprintf('PHP %s', PHP_VERSION)
-                : sprintf(
+                ? \sprintf('PHP %s', \PHP_VERSION)
+                : \sprintf(
                     'PHP %s gefunden, mindestens PHP 8.2 erforderlich.',
-                    PHP_VERSION,
+                    \PHP_VERSION,
                 ),
         );
     }
@@ -61,7 +58,7 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'acme.sh',
                 successful: false,
-                message: sprintf('Datei nicht gefunden: %s', $path),
+                message: \sprintf('Datei nicht gefunden: %s', $path),
             );
         }
 
@@ -69,7 +66,7 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'acme.sh',
                 successful: false,
-                message: sprintf('Datei ist nicht ausführbar: %s', $path),
+                message: \sprintf('Datei ist nicht ausführbar: %s', $path),
             );
         }
 
@@ -116,13 +113,13 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'Konfigurationsdatei',
                 successful: false,
-                message: sprintf('Datei nicht gefunden: %s', $path),
+                message: \sprintf('Datei nicht gefunden: %s', $path),
             );
         }
 
         $permissions = fileperms($path);
 
-        if ($permissions === false) {
+        if (false === $permissions) {
             return new DoctorCheck(
                 name: 'Konfigurationsdatei',
                 successful: false,
@@ -130,13 +127,13 @@ final readonly class DoctorService
             );
         }
 
-        $mode = substr(sprintf('%o', $permissions), -4);
-        $secure = in_array($mode, ['0600', '0640'], true);
+        $mode = substr(\sprintf('%o', $permissions), -4);
+        $secure = \in_array($mode, ['0600', '0640'], true);
 
         return new DoctorCheck(
             name: 'Konfigurationsdatei',
             successful: $secure,
-            message: sprintf('%s, Rechte %s', $path, $mode),
+            message: \sprintf('%s, Rechte %s', $path, $mode),
         );
     }
 
@@ -148,12 +145,12 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'ISPConfig-API',
                 successful: true,
-                message: sprintf(
+                message: \sprintf(
                     'Login erfolgreich, Session %s…',
                     substr($session->id(), 0, 8),
                 ),
             );
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             return new DoctorCheck(
                 name: 'ISPConfig-API',
                 successful: false,
@@ -167,7 +164,7 @@ final readonly class DoctorService
     private function checkDnsProvider(): DoctorCheck
     {
         $provider = $this->configuration->dnsProvider;
-        $path = sprintf(
+        $path = \sprintf(
             '/root/.acme.sh/dnsapi/%s.sh',
             $provider,
         );
@@ -176,14 +173,14 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'DNS-Provider',
                 successful: false,
-                message: sprintf('DNS-API-Script fehlt: %s', $path),
+                message: \sprintf('DNS-API-Script fehlt: %s', $path),
             );
         }
 
         return new DoctorCheck(
             name: 'DNS-Provider',
             successful: true,
-            message: sprintf('%s (%s)', $provider, $path),
+            message: \sprintf('%s (%s)', $provider, $path),
         );
     }
 

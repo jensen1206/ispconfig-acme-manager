@@ -1,14 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Acme;
 
 use App\Certificate\Certificate;
 use App\Config\Configuration;
 use App\Process\ProcessResult;
 use App\Process\ProcessRunner;
-use RuntimeException;
 
 final readonly class AcmeManager
 {
@@ -35,17 +32,14 @@ final readonly class AcmeManager
             $result->contains('Domains not changed')
             && $this->certificateFilesExist($certificate)
         ) {
-            echo PHP_EOL;
-            echo 'Hinweis: Das vorhandene Zertifikat ist noch gültig.' . PHP_EOL;
-            echo 'acme.sh hat die Ausstellung übersprungen.' . PHP_EOL;
+            echo \PHP_EOL;
+            echo 'Hinweis: Das vorhandene Zertifikat ist noch gültig.'.\PHP_EOL;
+            echo 'acme.sh hat die Ausstellung übersprungen.'.\PHP_EOL;
 
             return $result;
         }
 
-        throw new RuntimeException(sprintf(
-            "Die Zertifikatsausstellung ist fehlgeschlagen.\n%s",
-            $result->combinedOutput(),
-        ));
+        throw new \RuntimeException(\sprintf("Die Zertifikatsausstellung ist fehlgeschlagen.\n%s", $result->combinedOutput()));
     }
 
     public function install(Certificate $certificate): ProcessResult
@@ -56,10 +50,7 @@ final readonly class AcmeManager
         );
 
         if (!$result->successful()) {
-            throw new RuntimeException(sprintf(
-                "Die Zertifikatsinstallation ist fehlgeschlagen.\n%s",
-                $result->combinedOutput(),
-            ));
+            throw new \RuntimeException(\sprintf("Die Zertifikatsinstallation ist fehlgeschlagen.\n%s", $result->combinedOutput()));
         }
 
         return $result;

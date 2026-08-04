@@ -1,11 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\ISPConfig;
 
 use App\Config\Configuration;
-use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -30,7 +27,7 @@ final class ApiClient
             'password' => $this->configuration->ispconfigPassword,
         ], includeSession: false);
 
-        if (!is_string($response) || trim($response) === '') {
+        if (!\is_string($response) || '' === trim($response)) {
             throw new ApiException('ISPConfig hat keine gültige Session-ID zurückgegeben.');
         }
 
@@ -69,15 +66,11 @@ final class ApiClient
         array $parameters,
     ): mixed {
         if ($clientId <= 0) {
-            throw new ApiException(
-                'Die Client-ID muss größer als 0 sein.',
-            );
+            throw new ApiException('Die Client-ID muss größer als 0 sein.');
         }
 
         if ($domainId <= 0) {
-            throw new ApiException(
-                'Die Domain-ID muss größer als 0 sein.',
-            );
+            throw new ApiException('Die Domain-ID muss größer als 0 sein.');
         }
 
         return $this->request(
@@ -118,50 +111,32 @@ final class ApiClient
             $statusCode = $response->getStatusCode();
             $content = $response->getContent(false);
         } catch (ExceptionInterface $exception) {
-            throw new ApiException(
-                sprintf('ISPConfig-API-Aufruf "%s" ist fehlgeschlagen.', $method),
-                previous: $exception,
-            );
+            throw new ApiException(\sprintf('ISPConfig-API-Aufruf "%s" ist fehlgeschlagen.', $method), previous: $exception);
         }
 
         if ($statusCode < 200 || $statusCode >= 300) {
-            throw new ApiException(sprintf(
-                'ISPConfig-API-Aufruf "%s" lieferte HTTP %d: %s',
-                $method,
-                $statusCode,
-                $content,
-            ));
+            throw new ApiException(\sprintf('ISPConfig-API-Aufruf "%s" lieferte HTTP %d: %s', $method, $statusCode, $content));
         }
 
         try {
             $decoded = json_decode(
                 $content,
                 true,
-                flags: JSON_THROW_ON_ERROR,
+                flags: \JSON_THROW_ON_ERROR,
             );
-        } catch (JsonException $exception) {
-            throw new ApiException(
-                sprintf('Ungültige JSON-Antwort bei "%s": %s', $method, $content),
-                previous: $exception,
-            );
+        } catch (\JsonException $exception) {
+            throw new ApiException(\sprintf('Ungültige JSON-Antwort bei "%s": %s', $method, $content), previous: $exception);
         }
 
-        if (!is_array($decoded)) {
-            throw new ApiException(sprintf(
-                'Unerwartete Antwortstruktur bei "%s".',
-                $method,
-            ));
+        if (!\is_array($decoded)) {
+            throw new ApiException(\sprintf('Unerwartete Antwortstruktur bei "%s".', $method));
         }
 
         $code = $decoded['code'] ?? null;
         $message = $decoded['message'] ?? null;
 
-        if (!is_string($code) || $code !== 'ok') {
-            throw new ApiException(sprintf(
-                'ISPConfig-API-Fehler bei "%s": %s',
-                $method,
-                is_string($message) ? $message : 'Unbekannter Fehler',
-            ));
+        if (!\is_string($code) || 'ok' !== $code) {
+            throw new ApiException(\sprintf('ISPConfig-API-Fehler bei "%s": %s', $method, \is_string($message) ? $message : 'Unbekannter Fehler'));
         }
 
         return $decoded['response'] ?? null;
@@ -169,7 +144,7 @@ final class ApiClient
 
     private function apiUrl(string $method): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/remote/json.php?%s',
             rtrim($this->configuration->ispconfigServer, '/'),
             rawurlencode($method),
