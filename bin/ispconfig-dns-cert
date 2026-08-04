@@ -48,11 +48,7 @@ $acmeManager = new AcmeManager(
         processRunner: $processRunner,
 );
 
-$certificateService = new CertificateService(
-        websiteRepository: $websiteRepository,
-        certificateFactory: $certificateFactory,
-        acmeManager: $acmeManager,
-);
+
 
 $doctorService = new DoctorService(
         configuration: $configuration,
@@ -75,6 +71,14 @@ $certificateVerificationService = new CertificateVerificationService(
     websiteRepository: $websiteRepository,
     certificateFactory: $certificateFactory,
     certificateReader: $certificateReader,
+);
+
+$certificateService = new CertificateService(
+    websiteRepository: $websiteRepository,
+    certificateFactory: $certificateFactory,
+    acmeManager: $acmeManager,
+    websiteUpdater: $websiteUpdater,
+    verificationService: $certificateVerificationService,
 );
 
 $application = new Application(
