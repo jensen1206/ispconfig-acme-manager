@@ -6,7 +6,7 @@ use App\Acme\AcmeManager;
 use App\Certificate\CertificateFactory;
 use App\Domain\Hostname;
 use App\ISPConfig\WebsiteRepository;
-use App\Process\ProcessResult;
+use App\ISPConfig\WebsiteUpdater;
 
 final readonly class CertificateService
 {
@@ -14,6 +14,8 @@ final readonly class CertificateService
         private WebsiteRepository $websiteRepository,
         private CertificateFactory $certificateFactory,
         private AcmeManager $acmeManager,
+        private WebsiteUpdater $websiteUpdater,
+        private CertificateVerificationService $verificationService,
     ) {
     }
 
@@ -30,33 +32,51 @@ final readonly class CertificateService
         );
     }
 
-    /**
-     * @return array{
-     *     plan: CertificatePlan,
-     *     issueResult: ProcessResult,
-     *     installResult: ProcessResult
-     * }
-     */
     public function issue(
         Hostname $hostname,
         bool $force = false,
-    ): array {
+    ): CertificateIssueResult {
         $plan = $this->preview($hostname);
 
+        /*
+         * 1. Zertifikat per DNS-01 ausstellen.
+         */
         $issueResult = $this->acmeManager->issue(
             certificate: $plan->certificate,
             force: $force,
         );
 
+        /*
+         * 2. Zertifikat in den SSL-Pfad der Website installieren.
+         */
         $installResult = $this->acmeManager->install(
-            $plan->certificate,
+            certificate: $plan->certificate,
         );
 
-        return [
-            'plan' => $plan,
-            'issueResult' => $issueResult,
-            'installResult' => $installResult,
-        ];
+        /*
+         * 3. Zertifikat über die offizielle Remote API in ISPConfig speichern.
+         *
+         * Dabei wird ssl_letsencrypt auf "n" gesetzt.
+         */
+        $updateResult = $this->websiteUpdater->saveCertificate(
+            website: $plan->website,
+            certificate: $plan->certificate,
+        );
+
+        /*
+         * 4. Das installierte lokale Zertifikat prüfen.
+         */
+        $verificationReport = $this->verificationService->verify(
+            hostname: $hostname,
+        );
+
+        return new CertificateIssueResult(
+            plan: $plan,
+            issueResult: $issueResult,
+            installResult: $installResult,
+            updateResult: $updateResult,
+            verificationReport: $verificationReport,
+        );
     }
 
     /**

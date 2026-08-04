@@ -25,7 +25,7 @@ final class IssueCertificateCommand extends Command
     {
         $this
             ->setDescription(
-                'Stellt ein DNS-01-Zertifikat aus und installiert es.',
+                'Stellt ein DNS-01-Zertifikat aus, installiert und verifiziert es.',
             )
             ->addArgument(
                 name: 'domain',
@@ -36,7 +36,7 @@ final class IssueCertificateCommand extends Command
                 name: 'force',
                 shortcut: 'f',
                 mode: InputOption::VALUE_NONE,
-                description: 'Erzwingt eine neue Ausstellung.',
+                description: 'Erzwingt eine neue Ausstellung über acme.sh.',
             )
             ->addOption(
                 name: 'yes',
@@ -73,27 +73,32 @@ final class IssueCertificateCommand extends Command
 
             $io->definitionList(
                 ['Domain' => $plan->website->domain()],
+                ['Domain-ID' => (string) $plan->website->id],
+                ['Client-Gruppe' => $plan->website->systemGroup],
                 [
                     'Hostnamen' => implode(', ', $plan->certificate->hostnameValues()),
                 ],
                 [
                     'Wildcard' => $plan->certificate->containsWildcard() ? 'ja' : 'nein',
                 ],
+                ['Ziel-Key' => $plan->certificate->keyPath],
+                ['Ziel-Zertifikat' => $plan->certificate->certificatePath],
                 [
-                    'Ziel-Key' => $plan->certificate->keyPath,
+                    'ISPConfig Let’s Encrypt aktuell' => $plan->website->letsEncryptEnabled ? 'ja' : 'nein',
                 ],
-                [
-                    'Ziel-Zertifikat' => $plan->certificate->certificatePath,
-                ],
-                [
-                    'Erzwungene Ausstellung' => $force ? 'ja' : 'nein',
-                ],
+                ['Erzwungene Ausstellung' => $force ? 'ja' : 'nein'],
             );
+
+            $io->warning([
+                'Das Zertifikat wird per DNS-01 ausgestellt.',
+                'Danach wird die Website über die ISPConfig Remote API aktualisiert.',
+                'ISPConfig Let’s Encrypt wird dabei deaktiviert.',
+            ]);
 
             if (
                 !$skipConfirmation
                 && !$io->confirm(
-                    'Zertifikat jetzt ausstellen und installieren?',
+                    'Zertifikat jetzt ausstellen und Website aktualisieren?',
                     false,
                 )
             ) {
@@ -102,38 +107,73 @@ final class IssueCertificateCommand extends Command
                 return Command::SUCCESS;
             }
 
-            $io->section('Zertifikat ausstellen');
+            $io->section('1. Zertifikat ausstellen und installieren');
 
             $result = $this->certificateService->issue(
                 hostname: $hostname,
                 force: $force,
             );
 
-            $certificate = $result['plan']->certificate;
+            $io->section('2. ISPConfig aktualisieren');
 
-            if (!is_file($certificate->keyPath)) {
-                throw new \RuntimeException(\sprintf('Der installierte Schlüssel wurde nicht gefunden: %s', $certificate->keyPath));
+            $updateDescription = match (true) {
+                \is_bool($result->updateResult) => $result->updateResult ? 'true' : 'false',
+
+                \is_int($result->updateResult) => (string) $result->updateResult,
+
+                \is_string($result->updateResult) => $result->updateResult,
+
+                \is_array($result->updateResult) => 'Array-Antwort',
+
+                default => get_debug_type($result->updateResult),
+            };
+
+            $io->writeln(\sprintf(
+                '<info>✔</info> ISPConfig API-Antwort: %s',
+                $updateDescription,
+            ));
+
+            $io->section('3. Lokale Zertifikatsprüfung');
+
+            foreach ($result->verificationReport->checks as $check) {
+                $io->writeln(\sprintf(
+                    '%s <comment>%s</comment>: %s',
+                    $check->successful
+                        ? '<info>✔</info>'
+                        : '<error>✘</error>',
+                    $check->name,
+                    $check->message,
+                ));
             }
 
-            if (!is_file($certificate->certificatePath)) {
-                throw new \RuntimeException(\sprintf('Das installierte Zertifikat wurde nicht gefunden: %s', $certificate->certificatePath));
+            if (!$result->verificationReport->successful()) {
+                $io->error(
+                    'Das Zertifikat wurde installiert, aber mindestens eine Prüfung ist fehlgeschlagen.',
+                );
+
+                return Command::FAILURE;
             }
+
+            $certificate = $result->plan->certificate;
+            $certificateInfo = $result->verificationReport->certificateInfo;
 
             $io->success([
-                'Zertifikat wurde ausgestellt und installiert.',
+                'Zertifikat wurde erfolgreich ausgestellt, installiert und geprüft.',
+                \sprintf('Domain: %s', $certificate->domain()),
                 \sprintf('Key: %s', $certificate->keyPath),
                 \sprintf(
                     'Zertifikat: %s',
                     $certificate->certificatePath,
                 ),
+                \sprintf(
+                    'Gültig bis: %s',
+                    $certificateInfo->validUntil->format('d.m.Y H:i:s'),
+                ),
+                \sprintf(
+                    'Restlaufzeit: %d Tage',
+                    $certificateInfo->daysUntilExpiration(),
+                ),
             ]);
-
-            if ($result['plan']->website->letsEncryptEnabled) {
-                $io->warning(
-                    'ISPConfig Let’s Encrypt ist für diese Website noch aktiviert. '
-                    .'Das deaktivieren wir im nächsten Schritt automatisch über die API.',
-                );
-            }
 
             return Command::SUCCESS;
         } catch (\Throwable $exception) {

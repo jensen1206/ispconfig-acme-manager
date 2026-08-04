@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
 use App\Certificate\CertificateFactory;
@@ -27,7 +25,7 @@ final readonly class CertificateVerificationService
         $keyPath = $certificate->keyPath;
 
         if (!is_file($certificatePath)) {
-            $legacyCertificatePath = sprintf(
+            $legacyCertificatePath = \sprintf(
                 '%s/ssl/%s-le.crt',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -39,7 +37,7 @@ final readonly class CertificateVerificationService
         }
 
         if (!is_file($keyPath)) {
-            $legacyKeyPath = sprintf(
+            $legacyKeyPath = \sprintf(
                 '%s/ssl/%s-le.key',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -69,7 +67,7 @@ final readonly class CertificateVerificationService
         $checks[] = new VerificationCheck(
             name: 'Gültigkeitszeitraum',
             successful: $info->isCurrentlyValid(),
-            message: sprintf(
+            message: \sprintf(
                 '%s bis %s (%d Tage verbleibend)',
                 $info->validFrom->format('d.m.Y H:i:s'),
                 $info->validUntil->format('d.m.Y H:i:s'),
@@ -84,10 +82,10 @@ final readonly class CertificateVerificationService
 
         $checks[] = new VerificationCheck(
             name: 'Zertifikatsnamen',
-            successful: $missingHostnames === [],
-            message: $missingHostnames === []
+            successful: [] === $missingHostnames,
+            message: [] === $missingHostnames
                 ? implode(', ', $info->subjectAlternativeNames)
-                : sprintf(
+                : \sprintf(
                     'Fehlend: %s',
                     implode(', ', $missingHostnames),
                 ),
