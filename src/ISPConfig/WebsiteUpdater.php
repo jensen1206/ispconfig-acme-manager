@@ -1,11 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\ISPConfig;
 
 use App\Certificate\Certificate;
-use RuntimeException;
 
 final readonly class WebsiteUpdater
 {
@@ -55,11 +52,8 @@ final readonly class WebsiteUpdater
             parameters: $this->buildCertificateParameters($certificate),
         );
 
-        if ($result === false || $result === null) {
-            throw new RuntimeException(sprintf(
-                'ISPConfig konnte die Website "%s" nicht aktualisieren.',
-                $website->domain(),
-            ));
+        if (false === $result || null === $result) {
+            throw new \RuntimeException(\sprintf('ISPConfig konnte die Website "%s" nicht aktualisieren.', $website->domain()));
         }
 
         return $result;
@@ -68,19 +62,13 @@ final readonly class WebsiteUpdater
     private function readRequiredFile(string $path): string
     {
         if (!is_file($path)) {
-            throw new RuntimeException(sprintf(
-                'Zertifikatsdatei wurde nicht gefunden: %s',
-                $path,
-            ));
+            throw new \RuntimeException(\sprintf('Zertifikatsdatei wurde nicht gefunden: %s', $path));
         }
 
         $content = file_get_contents($path);
 
-        if (!is_string($content) || trim($content) === '') {
-            throw new RuntimeException(sprintf(
-                'Zertifikatsdatei ist leer oder konnte nicht gelesen werden: %s',
-                $path,
-            ));
+        if (!\is_string($content) || '' === trim($content)) {
+            throw new \RuntimeException(\sprintf('Zertifikatsdatei ist leer oder konnte nicht gelesen werden: %s', $path));
         }
 
         return trim($content);

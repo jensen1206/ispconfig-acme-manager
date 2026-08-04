@@ -1,11 +1,8 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\ISPConfig;
 
 use App\Domain\Hostname;
-use InvalidArgumentException;
 
 final readonly class Website
 {
@@ -24,16 +21,12 @@ final readonly class Website
         public bool $sslEnabled,
         public bool $letsEncryptEnabled,
     ) {
-        if ($this->hostnames === []) {
-            throw new InvalidArgumentException(
-                'Eine Website benötigt mindestens einen Hostnamen.',
-            );
+        if ([] === $this->hostnames) {
+            throw new \InvalidArgumentException('Eine Website benötigt mindestens einen Hostnamen.');
         }
 
         if (!$this->containsHostname($this->primaryHostname)) {
-            throw new InvalidArgumentException(
-                'Der primäre Hostname muss in der Hostnamenliste enthalten sein.',
-            );
+            throw new \InvalidArgumentException('Der primäre Hostname muss in der Hostnamenliste enthalten sein.');
         }
     }
 
@@ -44,12 +37,12 @@ final readonly class Website
 
     public function sslDirectory(): string
     {
-        return $this->documentRoot . '/ssl';
+        return $this->documentRoot.'/ssl';
     }
 
     public function certificatePath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.crt',
             $this->sslDirectory(),
             $this->domain(),
@@ -58,7 +51,7 @@ final readonly class Website
 
     public function keyPath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.key',
             $this->sslDirectory(),
             $this->domain(),
@@ -67,7 +60,7 @@ final readonly class Website
 
     public function acmeDirectory(): string
     {
-        return sprintf(
+        return \sprintf(
             '/root/.acme.sh/%s_ecc',
             $this->domain(),
         );
@@ -75,7 +68,7 @@ final readonly class Website
 
     public function acmeCertificatePath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.cer',
             $this->acmeDirectory(),
             $this->domain(),
@@ -84,7 +77,7 @@ final readonly class Website
 
     public function acmeKeyPath(): string
     {
-        return sprintf(
+        return \sprintf(
             '%s/%s.key',
             $this->acmeDirectory(),
             $this->domain(),
@@ -93,12 +86,12 @@ final readonly class Website
 
     public function acmeBundlePath(): string
     {
-        return $this->acmeDirectory() . '/ca.cer';
+        return $this->acmeDirectory().'/ca.cer';
     }
 
     public function acmeFullChainPath(): string
     {
-        return $this->acmeDirectory() . '/fullchain.cer';
+        return $this->acmeDirectory().'/fullchain.cer';
     }
 
     /**

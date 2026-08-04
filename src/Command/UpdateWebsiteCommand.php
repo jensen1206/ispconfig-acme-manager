@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Command;
 
 use App\Certificate\CertificateFactory;
@@ -15,7 +13,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Throwable;
 
 final class UpdateWebsiteCommand extends Command
 {
@@ -56,7 +53,7 @@ final class UpdateWebsiteCommand extends Command
         try {
             $domain = $input->getArgument('domain');
 
-            if (!is_string($domain)) {
+            if (!\is_string($domain)) {
                 $io->error(
                     'Das Argument "domain" muss eine Zeichenkette sein.',
                 );
@@ -90,21 +87,21 @@ final class UpdateWebsiteCommand extends Command
                 ['ssl_letsencrypt' => $parameters['ssl_letsencrypt']],
                 ['ssl_action' => $parameters['ssl_action']],
                 [
-                    'Zertifikat' => sprintf(
+                    'Zertifikat' => \sprintf(
                         '%d Bytes',
-                        strlen($parameters['ssl_cert']),
+                        \strlen($parameters['ssl_cert']),
                     ),
                 ],
                 [
-                    'Bundle' => sprintf(
+                    'Bundle' => \sprintf(
                         '%d Bytes',
-                        strlen($parameters['ssl_bundle']),
+                        \strlen($parameters['ssl_bundle']),
                     ),
                 ],
                 [
-                    'Privater Schlüssel' => sprintf(
+                    'Privater Schlüssel' => \sprintf(
                         '%d Bytes',
-                        strlen($parameters['ssl_key']),
+                        \strlen($parameters['ssl_key']),
                     ),
                 ],
             );
@@ -127,21 +124,21 @@ final class UpdateWebsiteCommand extends Command
             );
 
             $resultDescription = match (true) {
-                is_bool($result) => $result ? 'true' : 'false',
-                is_int($result) => (string) $result,
-                is_string($result) => $result,
-                is_array($result) => 'Array-Antwort',
+                \is_bool($result) => $result ? 'true' : 'false',
+                \is_int($result) => (string) $result,
+                \is_string($result) => $result,
+                \is_array($result) => 'Array-Antwort',
                 default => get_debug_type($result),
             };
 
             $io->success([
                 'ISPConfig hat das Website-Update angenommen.',
-                sprintf('API-Antwort: %s', $resultDescription),
+                \sprintf('API-Antwort: %s', $resultDescription),
                 'Die Zertifikatsinhalte wurden nicht ausgegeben.',
             ]);
 
             return Command::SUCCESS;
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;

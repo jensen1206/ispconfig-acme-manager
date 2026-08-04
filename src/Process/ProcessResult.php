@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Process;
 
 final readonly class ProcessResult
@@ -15,18 +13,18 @@ final readonly class ProcessResult
 
     public function successful(): bool
     {
-        return $this->exitCode === 0;
+        return 0 === $this->exitCode;
     }
 
     public function combinedOutput(): string
     {
-        return trim($this->output . PHP_EOL . $this->errorOutput);
+        return trim($this->output.\PHP_EOL.$this->errorOutput);
     }
 
     public function contains(string $needle): bool
     {
         return str_contains(
-            $this->output . PHP_EOL . $this->errorOutput,
+            $this->output.\PHP_EOL.$this->errorOutput,
             $needle,
         );
     }

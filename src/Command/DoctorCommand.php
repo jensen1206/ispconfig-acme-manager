@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Command;
 
 use App\Service\DoctorService;
@@ -9,7 +7,6 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Throwable;
 
 final class DoctorCommand extends Command
 {
@@ -40,7 +37,7 @@ final class DoctorCommand extends Command
 
             foreach ($checks as $check) {
                 if ($check->successful) {
-                    $io->writeln(sprintf(
+                    $io->writeln(\sprintf(
                         '<info>✔</info> <comment>%s</comment>: %s',
                         $check->name,
                         $check->message,
@@ -51,7 +48,7 @@ final class DoctorCommand extends Command
 
                 $hasErrors = true;
 
-                $io->writeln(sprintf(
+                $io->writeln(\sprintf(
                     '<error>✘</error> <comment>%s</comment>: %s',
                     $check->name,
                     $check->message,
@@ -71,7 +68,7 @@ final class DoctorCommand extends Command
             );
 
             return Command::SUCCESS;
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;

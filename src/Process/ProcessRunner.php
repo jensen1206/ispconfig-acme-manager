@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Process;
 
 use Symfony\Component\Process\Process;
@@ -22,15 +20,15 @@ final readonly class ProcessRunner
         $process->run(
             $liveOutput
                 ? static function (string $type, string $buffer): void {
-                if ($type === Process::ERR) {
-                    fwrite(STDERR, $buffer);
+                    if (Process::ERR === $type) {
+                        fwrite(\STDERR, $buffer);
 
-                    return;
+                        return;
+                    }
+
+                    echo $buffer;
                 }
-
-                echo $buffer;
-            }
-                : null,
+            : null,
         );
 
         return new ProcessResult(

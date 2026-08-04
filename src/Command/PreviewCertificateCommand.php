@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Command;
 
 use App\Domain\Hostname;
@@ -12,7 +10,6 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Throwable;
 
 final class PreviewCertificateCommand extends Command
 {
@@ -45,7 +42,7 @@ final class PreviewCertificateCommand extends Command
         try {
             $domain = $input->getArgument('domain');
 
-            if (!is_string($domain)) {
+            if (!\is_string($domain)) {
                 $io->error('Das Argument "domain" muss eine Zeichenkette sein.');
 
                 return Command::INVALID;
@@ -70,8 +67,7 @@ final class PreviewCertificateCommand extends Command
                 ['Server-ID' => (string) $website->serverId],
                 ['SSL' => $website->sslEnabled ? 'ja' : 'nein'],
                 [
-                    'ISPConfig Let’s Encrypt' =>
-                        $website->letsEncryptEnabled ? 'ja' : 'nein',
+                    'ISPConfig Let’s Encrypt' => $website->letsEncryptEnabled ? 'ja' : 'nein',
                 ],
             );
 
@@ -80,17 +76,14 @@ final class PreviewCertificateCommand extends Command
             $io->definitionList(
                 ['Primärer Hostname' => $certificate->domain()],
                 [
-                    'Wildcard' =>
-                        $certificate->containsWildcard() ? 'ja' : 'nein',
+                    'Wildcard' => $certificate->containsWildcard() ? 'ja' : 'nein',
                 ],
                 ['Schlüsseltyp' => $certificate->keyType->value],
                 [
-                    'Zertifizierungsstelle' =>
-                        $certificate->certificateAuthority->value,
+                    'Zertifizierungsstelle' => $certificate->certificateAuthority->value,
                 ],
                 [
-                    'Challenge' =>
-                        $certificate->challengeType->value,
+                    'Challenge' => $certificate->challengeType->value,
                 ],
                 ['ACME-Verzeichnis' => $certificate->acmeDirectory],
                 ['Ziel-Key' => $certificate->keyPath],
@@ -119,7 +112,7 @@ final class PreviewCertificateCommand extends Command
             );
 
             return Command::SUCCESS;
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;
