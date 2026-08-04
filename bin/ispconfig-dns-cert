@@ -16,6 +16,10 @@ use App\Service\CertificateService;
 use App\Service\DoctorService;
 use Symfony\Component\Console\Application;
 use Symfony\Component\HttpClient\HttpClient;
+use App\ISPConfig\WebsiteUpdater;
+use App\Command\UpdateWebsiteCommand;
+use App\ISPConfig\ClientIdResolver;
+use App\Command\UpdateDebugCommand;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -53,6 +57,15 @@ $doctorService = new DoctorService(
         processRunner: $processRunner,
 );
 
+$clientIdResolver = new ClientIdResolver(
+    apiClient: $apiClient,
+);
+
+$websiteUpdater = new WebsiteUpdater(
+    apiClient: $apiClient,
+    clientIdResolver: $clientIdResolver,
+);
+
 $application = new Application(
         name: 'ISPConfig DNS Certificate Manager',
         version: '0.3.0',
@@ -77,5 +90,25 @@ $application->add(
                 doctorService: $doctorService,
         ),
 );
+
+$application->add(
+    new UpdateDebugCommand(
+        websiteRepository: $websiteRepository,
+        certificateFactory: $certificateFactory,
+        websiteUpdater: $websiteUpdater,
+        apiClient: $apiClient,
+    ),
+);
+
+$application->add(
+    new UpdateWebsiteCommand(
+        websiteRepository: $websiteRepository,
+        certificateFactory: $certificateFactory,
+        websiteUpdater: $websiteUpdater,
+        apiClient: $apiClient,
+    ),
+);
+
+
 
 exit($application->run());

@@ -96,6 +96,7 @@ final readonly class WebsiteRepository
 
         return new Website(
             id: $this->requiredInt($data, 'domain_id'),
+            systemGroupId: $this->requiredInt($data, 'sys_groupid'),
             primaryHostname: $primaryHostname,
             hostnames: $this->createHostnames(
                 primaryHostname: $primaryHostname,
