@@ -14,6 +14,7 @@ final readonly class Website
      */
     public function __construct(
         public int $id,
+        public int $systemGroupId,
         public Hostname $primaryHostname,
         public array $hostnames,
         public string $documentRoot,

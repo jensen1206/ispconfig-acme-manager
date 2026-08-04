@@ -63,6 +63,36 @@ final class ApiClient
     /**
      * @param array<string, mixed> $parameters
      */
+    public function updateWebsite(
+        int $clientId,
+        int $domainId,
+        array $parameters,
+    ): mixed {
+        if ($clientId <= 0) {
+            throw new ApiException(
+                'Die Client-ID muss größer als 0 sein.',
+            );
+        }
+
+        if ($domainId <= 0) {
+            throw new ApiException(
+                'Die Domain-ID muss größer als 0 sein.',
+            );
+        }
+
+        return $this->request(
+            'sites_web_domain_update',
+            [
+                'client_id' => $clientId,
+                'primary_id' => $domainId,
+                'params' => $parameters,
+            ],
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
     private function post(
         string $method,
         array $parameters = [],
