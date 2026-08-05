@@ -1,9 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
+use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
+use Throwable;
 
 final readonly class WebsiteWatcher
 {
@@ -13,7 +17,7 @@ final readonly class WebsiteWatcher
     ) {
     }
 
-    public function watch(
+    public function watchAll(
         int $renewBeforeDays = 30,
         bool $dryRun = false,
     ): WatchReport {
@@ -21,7 +25,7 @@ final readonly class WebsiteWatcher
         $items = [];
 
         foreach ($this->websiteRepository->findAll() as $website) {
-            $items[] = $this->watchWebsite(
+            $items[] = $this->processWebsite(
                 website: $website,
                 renewBeforeDays: $renewBeforeDays,
                 dryRun: $dryRun,
@@ -34,7 +38,30 @@ final readonly class WebsiteWatcher
         );
     }
 
-    private function watchWebsite(
+    public function watchDomain(
+        Hostname $hostname,
+        int $renewBeforeDays = 30,
+        bool $dryRun = false,
+    ): WatchReport {
+        $startedAt = microtime(true);
+
+        $website = $this->websiteRepository->findByDomain(
+            $hostname,
+        );
+
+        return new WatchReport(
+            items: [
+                $this->processWebsite(
+                    website: $website,
+                    renewBeforeDays: $renewBeforeDays,
+                    dryRun: $dryRun,
+                ),
+            ],
+            duration: microtime(true) - $startedAt,
+        );
+    }
+
+    private function processWebsite(
         Website $website,
         int $renewBeforeDays,
         bool $dryRun,
@@ -45,7 +72,7 @@ final readonly class WebsiteWatcher
                 renewBeforeDays: $renewBeforeDays,
             );
 
-            if ('ssl-disabled' === $check->status) {
+            if ($check->status === 'ssl-disabled') {
                 return new WatchItemResult(
                     domain: $website->domain(),
                     status: 'ssl-disabled',
@@ -53,7 +80,7 @@ final readonly class WebsiteWatcher
                 );
             }
 
-            if ('external-dns' === $check->status) {
+            if ($check->status === 'external-dns') {
                 return new WatchItemResult(
                     domain: $website->domain(),
                     status: 'external-dns',
@@ -69,22 +96,23 @@ final readonly class WebsiteWatcher
                 );
             }
 
-            $isMissingCertificate = $this->isMissingCertificate($check);
+            $missingCertificate = $this->isMissingCertificate(
+                $check,
+            );
 
             if ($dryRun) {
                 return new WatchItemResult(
                     domain: $website->domain(),
-                    status: $isMissingCertificate
+                    status: $missingCertificate
                         ? 'issued'
                         : 'renewed',
-                    message: $isMissingCertificate
-                        ? \sprintf(
-                            'Zertifikat fehlt. Für "%s" würde ein neues Zertifikat ausgestellt.',
+                    message: $missingCertificate
+                        ? sprintf(
+                            'Für "%s" würde ein neues Zertifikat ausgestellt.',
                             $website->domain(),
                         )
-                        : \sprintf(
-                            'Das Zertifikat von "%s" würde erneuert: %s',
-                            $website->domain(),
+                        : sprintf(
+                            'Das Zertifikat würde erneuert: %s',
                             $check->message,
                         ),
                 );
@@ -104,7 +132,7 @@ final readonly class WebsiteWatcher
             }
 
             if (
-                null !== $result->verificationReport
+                $result->verificationReport !== null
                 && !$result->verificationReport->successful()
             ) {
                 return new WatchItemResult(
@@ -118,15 +146,15 @@ final readonly class WebsiteWatcher
 
             return new WatchItemResult(
                 domain: $website->domain(),
-                status: $isMissingCertificate
+                status: $missingCertificate
                     ? 'issued'
                     : 'renewed',
-                message: $isMissingCertificate
+                message: $missingCertificate
                     ? 'Ein neues Zertifikat wurde erfolgreich ausgestellt, installiert und geprüft.'
                     : 'Das Zertifikat wurde erfolgreich erneuert, installiert und geprüft.',
                 changed: true,
             );
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             return new WatchItemResult(
                 domain: $website->domain(),
                 status: 'error',
@@ -139,7 +167,7 @@ final readonly class WebsiteWatcher
     private function isMissingCertificate(
         RenewCheckResult $check,
     ): bool {
-        if ('invalid-local-certificate' !== $check->status) {
+        if ($check->status !== 'invalid-local-certificate') {
             return false;
         }
 
@@ -147,6 +175,9 @@ final readonly class WebsiteWatcher
 
         return str_contains($message, 'datei wurde nicht gefunden')
             || str_contains($message, 'zertifikat wurde nicht gefunden')
-            || str_contains($message, 'zertifikatsdatei wurde nicht gefunden');
+            || str_contains(
+                $message,
+                'zertifikatsdatei wurde nicht gefunden',
+            );
     }
 }
