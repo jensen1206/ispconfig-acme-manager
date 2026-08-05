@@ -30,4 +30,9 @@ return [
      * Seconds to wait for DNS propagation
      */
     'dns_sleep' => 120,
+
+    'managed_nameservers' => [
+        'ns1.example.com',
+        'ns2.example.com',
+    ],
 ];

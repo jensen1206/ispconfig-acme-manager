@@ -2,26 +2,9 @@
 
 A modern PHP CLI application for automated ACME certificate management on ISPConfig servers.
 
-Unlike traditional HTTP-01 workflows, ISPConfig ACME Manager focuses on **DNS-01 validation**, making certificate management more reliable while remaining fully compatible with future ISPConfig updates by using the official Remote API.
+Unlike the default ISPConfig Let's Encrypt integration, ISPConfig ACME Manager focuses on **DNS-01 validation**, making certificate management more reliable while remaining fully compatible with future ISPConfig updates by using the official Remote API.
 
-> **Project Status:** Early Development (v0.1.0)
-
----
-
-# Why?
-
-The default Let's Encrypt integration in ISPConfig relies on HTTP-01 validation.
-
-While this works for many environments, it can become problematic when using:
-
-- Reverse proxies
-- CDNs
-- Firewalls
-- Multiple web servers
-- Strict redirect rules
-- Let's Encrypt secondary validation
-
-DNS-01 validation eliminates these limitations and additionally enables wildcard certificates.
+> **Project Status:** Active Development (v0.4.0)
 
 ---
 
@@ -31,15 +14,23 @@ DNS-01 validation eliminates these limitations and additionally enables wildcard
 
 - Modern Symfony Console CLI
 - Official ISPConfig Remote API integration
-- Website discovery by domain
-- DNS-01 certificate planning
-- Let's Encrypt support
-- ACME command generation
-- Environment diagnostics (`doctor`)
+- Website discovery
+- DNS-01 certificate issuance
+- Automatic certificate installation
+- Automatic ISPConfig website update
+- Automatic Let's Encrypt deactivation
+- Local certificate verification
+- Intelligent renewal
+- Bulk renewal
+- Dry Run mode
+- External DNS detection
+- Wildcard certificate support
 - Certificate preview
-- Fully object-oriented architecture
-- Value Objects
+- Environment diagnostics (`doctor`)
+- Update debug mode
+- Strong typing
 - PHP Enums
+- Value Objects
 - PHPStan Level Max
 - Rector
 - PHPUnit
@@ -47,20 +38,152 @@ DNS-01 validation eliminates these limitations and additionally enables wildcard
 
 ---
 
-## Planned
+# Commands
 
-- Automatic certificate issuance
-- Automatic certificate installation
-- Automatic ISPConfig SSL updates
-- Automatic Apache reload
-- Certificate verification
-- Certificate renewal
-- Renew all websites
-- Wildcard certificate management
-- ZeroSSL support
-- Google Trust Services support
-- SSL.com support
-- Buypass support
+Show all commands
+
+```bash
+php bin/ispconfig-dns-cert list
+```
+
+Preview certificate creation
+
+```bash
+php bin/ispconfig-dns-cert preview example.com
+```
+
+Issue a certificate
+
+```bash
+php bin/ispconfig-dns-cert issue example.com
+```
+
+Verify a certificate
+
+```bash
+php bin/ispconfig-dns-cert verify example.com
+```
+
+Renew a single certificate
+
+```bash
+php bin/ispconfig-dns-cert renew example.com
+```
+
+Renew all managed certificates
+
+```bash
+php bin/ispconfig-dns-cert renew --all
+```
+
+Preview renewal without changing anything
+
+```bash
+php bin/ispconfig-dns-cert renew --all --dry-run
+```
+
+Update website certificate
+
+```bash
+php bin/ispconfig-dns-cert update example.com
+```
+
+Show update payload
+
+```bash
+php bin/ispconfig-dns-cert update-debug example.com
+```
+
+Run diagnostics
+
+```bash
+php bin/ispconfig-dns-cert doctor
+```
+
+---
+
+# Workflow
+
+The complete certificate lifecycle is fully automated.
+
+```
+Preview
+    │
+    ▼
+Issue
+    │
+    ▼
+DNS-01 Validation
+    │
+    ▼
+Certificate Installation
+    │
+    ▼
+ISPConfig Remote API Update
+    │
+    ▼
+Automatic Let's Encrypt Disable
+    │
+    ▼
+Certificate Verification
+```
+
+---
+
+# Intelligent Renewal
+
+Certificates are only renewed when necessary.
+
+The renewal process automatically checks
+
+- Certificate validity
+- Remaining lifetime
+- Private key
+- Subject Alternative Names
+- Certificate files
+- External DNS management
+
+Example
+
+```bash
+php bin/ispconfig-dns-cert renew --all --dry-run
+```
+
+Example output
+
+```
+✔ wiecker.eu              valid
+✔ art-picturedesign.de    valid
+⚠ cms.wiecker.eu          would renew
+⏭ harz-web24.de          external DNS
+```
+
+No certificates are requested during a dry run.
+
+---
+
+# External DNS Detection
+
+Domains whose DNS is not managed by ISPConfig are automatically detected.
+
+Example
+
+```
+harz-web24.de
+
+Nameservers
+
+ns81.domaincontrol.com
+ns82.domaincontrol.com
+
+Status
+
+External DNS
+
+Skipped
+```
+
+This prevents unnecessary ACME requests and avoids DNS validation failures.
 
 ---
 
@@ -80,7 +203,7 @@ DNS-01 validation eliminates these limitations and additionally enables wildcard
 Clone the repository
 
 ```bash
-git clone https://github.com/harz-web24/ispconfig-acme.git
+git clone https://github.com/jensen1206/ispconfig-acme-manager.git
 ```
 
 Install dependencies
@@ -100,18 +223,16 @@ chmod 600 /etc/ispconfig-dns-cert.php
 
 # Configuration
 
-Example configuration
-
 ```php
 <?php
 
 return [
 
-    'api_url' => 'https://server.example.com:8080',
+    'server' => 'https://server.example.com:8080',
 
     'username' => 'acme-manager',
 
-    'password' => 'secret',
+    'password' => 'change-me',
 
     'acme' => '/root/.acme.sh/acme.sh',
 
@@ -119,53 +240,15 @@ return [
 
     'dns_sleep' => 120,
 
+    'managed_nameservers' => [
+
+        'ns1.example.com',
+
+        'ns2.example.com',
+
+    ],
+
 ];
-
-```
-
-## ISPConfig Remote API
-
-The Remote API must be enabled.
-
-Example endpoint:
-
-https://server.example.com:8080/remote/json.php
-
-Create a dedicated Remote User with the required permissions:
-
-- Websites Domain Functions
-- DNS Zone Functions
-- DNS TXT Functions (if required)
-
-Do **not** use your ISPConfig administrator account.
-
-
----
-
-# Commands
-
-Show available commands
-
-```bash
-php bin/ispconfig-dns-cert list
-```
-
-Preview certificate generation
-
-```bash
-php bin/ispconfig-dns-cert preview example.com
-```
-
-Issue a certificate
-
-```bash
-php bin/ispconfig-dns-cert issue example.com
-```
-
-Run diagnostics
-
-```bash
-php bin/ispconfig-dns-cert doctor
 ```
 
 ---
@@ -176,70 +259,62 @@ php bin/ispconfig-dns-cert doctor
 Symfony Console
         │
         ▼
-CertificateService
+Commands
         │
         ▼
-WebsiteRepository
+Services
         │
-        ▼
-ISPConfig Remote API
-        │
-        ▼
-Website
-        │
-        ▼
-CertificateFactory
-        │
-        ▼
-Certificate
-        │
-        ▼
-AcmeManager
-        │
-        ▼
-ProcessRunner
-        │
-        ▼
-acme.sh
+        ├───────────────┐
+        ▼               ▼
+ISPConfig          Certificate
+        │               │
+        ▼               ▼
+Remote API      ACME Manager
+        │               │
+        └──────┬────────┘
+               ▼
+        Process Runner
+               │
+               ▼
+            acme.sh
 ```
 
 ---
 
-# Project Structure
+# Design Goals
 
-```
-src/
-
-├── Acme
-├── Certificate
-├── Command
-├── Config
-├── Domain
-├── ISPConfig
-├── Process
-└── Service
-```
+- No ISPConfig core modifications
+- No direct database updates
+- Official ISPConfig Remote API only
+- Fully update compatible
+- Object-oriented architecture
+- Strong typing
+- Readonly classes
+- Value Objects
+- Enums
+- PSR-12
+- PHPStan Level Max
 
 ---
 
 # Development
 
-Run PHP-CS-Fixer
+Format code
 
 ```bash
 composer fix
-```
-
-Run static analysis
-
-```bash
-composer stan
 ```
 
 Run syntax checks
 
 ```bash
 composer lint
+```
+
+Run static analysis
+
+```bash
+composer stan
 ```
 
 Run tests
@@ -256,50 +331,26 @@ composer rector
 
 ---
 
-# Design Goals
+# Current Roadmap
 
-The project follows a few simple principles:
+## Version 0.5
 
-- No ISPConfig core modifications
-- No direct database updates
-- Fully update-compatible
-- Official ISPConfig Remote API only
-- Strong typing
-- Readonly classes
-- Value Objects
-- Enums
-- PSR-12 coding style
-- PHPStan Level Max
-
----
-
-# Roadmap
-
-## Version 0.1
-
-- Project foundation
-- Preview command
-- Doctor command
-- ISPConfig Remote API integration
-
-## Version 0.2
-
-- Issue command
-- WebsiteUpdater
-- Certificate verification
-
-## Version 0.3
-
-- Renew command
-- Renew all certificates
+- Live certificate verification
+- GitHub Actions
 - Logging
 
-## Version 0.4
+## Version 0.6
 
-- ZeroSSL
+- ZeroSSL support
 - Google Trust Services
 - SSL.com
 - Buypass
+
+## Version 1.0
+
+- Stable release
+- Packagist
+- Complete documentation
 
 ---
 
@@ -307,7 +358,13 @@ The project follows a few simple principles:
 
 Contributions, ideas and bug reports are welcome.
 
-Please open an issue before implementing larger changes to discuss the proposed solution.
+Please open an issue before implementing larger features.
+
+---
+
+# License
+
+MIT License
 
 ---
 
@@ -315,19 +372,6 @@ Please open an issue before implementing larger changes to discuss the proposed 
 
 **Jens Wiecker**
 
-Full Stack Developer, PHP & Symfony Enthusiast
+Full Stack Developer
 
 🌐 https://wiecker.eu
-
----
-
-# License
-
-MIT License
----
-
-# Support
-
-If you discover a bug or have a feature request, please open an issue on GitHub.
-
-Security-related issues should be reported privately before public disclosure.

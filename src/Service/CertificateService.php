@@ -4,7 +4,9 @@ namespace App\Service;
 
 use App\Acme\AcmeManager;
 use App\Certificate\CertificateFactory;
+use App\Dns\NameserverChecker;
 use App\Domain\Hostname;
+use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
 use App\ISPConfig\WebsiteUpdater;
 
@@ -16,12 +18,19 @@ final readonly class CertificateService
         private AcmeManager $acmeManager,
         private WebsiteUpdater $websiteUpdater,
         private CertificateVerificationService $verificationService,
+        private NameserverChecker $nameserverChecker,
     ) {
     }
 
     public function preview(Hostname $hostname): CertificatePlan
     {
-        $website = $this->websiteRepository->findByDomain($hostname);
+        return $this->previewWebsite(
+            $this->websiteRepository->findByDomain($hostname),
+        );
+    }
+
+    public function previewWebsite(Website $website): CertificatePlan
+    {
         $certificate = $this->certificateFactory->fromWebsite($website);
 
         return new CertificatePlan(
@@ -36,38 +45,38 @@ final readonly class CertificateService
         Hostname $hostname,
         bool $force = false,
     ): CertificateIssueResult {
-        $plan = $this->preview($hostname);
+        return $this->issueWebsite(
+            website: $this->websiteRepository->findByDomain($hostname),
+            force: $force,
+        );
+    }
 
-        /*
-         * 1. Zertifikat per DNS-01 ausstellen.
-         */
+    public function issueWebsite(
+        Website $website,
+        bool $force = false,
+    ): CertificateIssueResult {
+        $this->nameserverChecker->assertManaged(
+            $website->primaryHostname,
+        );
+
+        $plan = $this->previewWebsite($website);
+
         $issueResult = $this->acmeManager->issue(
             certificate: $plan->certificate,
             force: $force,
         );
 
-        /*
-         * 2. Zertifikat in den SSL-Pfad der Website installieren.
-         */
         $installResult = $this->acmeManager->install(
             certificate: $plan->certificate,
         );
 
-        /*
-         * 3. Zertifikat über die offizielle Remote API in ISPConfig speichern.
-         *
-         * Dabei wird ssl_letsencrypt auf "n" gesetzt.
-         */
         $updateResult = $this->websiteUpdater->saveCertificate(
             website: $plan->website,
             certificate: $plan->certificate,
         );
 
-        /*
-         * 4. Das installierte lokale Zertifikat prüfen.
-         */
-        $verificationReport = $this->verificationService->verify(
-            hostname: $hostname,
+        $verificationReport = $this->verificationService->verifyWebsite(
+            $website,
         );
 
         return new CertificateIssueResult(
