@@ -1,59 +1,58 @@
 #!/usr/bin/env php
 <?php
 
-declare(strict_types=1);
-
 use App\Acme\AcmeManager;
 use App\Certificate\CertificateFactory;
+use App\Certificate\CertificateReader;
 use App\Command\DoctorCommand;
 use App\Command\IssueCertificateCommand;
 use App\Command\PreviewCertificateCommand;
+use App\Command\UpdateDebugCommand;
+use App\Command\UpdateWebsiteCommand;
+use App\Command\VerifyCertificateCommand;
 use App\Config\Configuration;
 use App\ISPConfig\ApiClient;
+use App\ISPConfig\ClientIdResolver;
 use App\ISPConfig\WebsiteRepository;
+use App\ISPConfig\WebsiteUpdater;
 use App\Process\ProcessRunner;
 use App\Service\CertificateService;
+use App\Service\CertificateVerificationService;
 use App\Service\DoctorService;
 use Symfony\Component\Console\Application;
 use Symfony\Component\HttpClient\HttpClient;
-use App\ISPConfig\WebsiteUpdater;
-use App\Command\UpdateWebsiteCommand;
-use App\ISPConfig\ClientIdResolver;
-use App\Command\UpdateDebugCommand;
-use App\Certificate\CertificateReader;
-use App\Command\VerifyCertificateCommand;
-use App\Service\CertificateVerificationService;
+use App\Command\RenewCertificateCommand;
+use App\Service\RenewService;
+use App\Dns\NameserverChecker;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(__DIR__).'/vendor/autoload.php';
 
 $configuration = Configuration::fromFile(
-        '/etc/ispconfig-dns-cert.php',
+    '/etc/ispconfig-dns-cert.php',
 );
 
 $apiClient = new ApiClient(
-        httpClient: HttpClient::create(),
-        configuration: $configuration,
+    httpClient: HttpClient::create(),
+    configuration: $configuration,
 );
 
 $processRunner = new ProcessRunner();
 
 $websiteRepository = new WebsiteRepository(
-        apiClient: $apiClient,
+    apiClient: $apiClient,
 );
 
 $certificateFactory = new CertificateFactory();
 
 $acmeManager = new AcmeManager(
-        configuration: $configuration,
-        processRunner: $processRunner,
+    configuration: $configuration,
+    processRunner: $processRunner,
 );
 
-
-
 $doctorService = new DoctorService(
-        configuration: $configuration,
-        apiClient: $apiClient,
-        processRunner: $processRunner,
+    configuration: $configuration,
+    apiClient: $apiClient,
+    processRunner: $processRunner,
 );
 
 $clientIdResolver = new ClientIdResolver(
@@ -62,6 +61,7 @@ $clientIdResolver = new ClientIdResolver(
 
 $websiteUpdater = new WebsiteUpdater(
     apiClient: $apiClient,
+    websiteRepository: $websiteRepository,
     clientIdResolver: $clientIdResolver,
 );
 
@@ -73,37 +73,49 @@ $certificateVerificationService = new CertificateVerificationService(
     certificateReader: $certificateReader,
 );
 
+$nameserverChecker = new NameserverChecker(
+    configuration: $configuration,
+);
+
 $certificateService = new CertificateService(
     websiteRepository: $websiteRepository,
     certificateFactory: $certificateFactory,
     acmeManager: $acmeManager,
     websiteUpdater: $websiteUpdater,
     verificationService: $certificateVerificationService,
+    nameserverChecker: $nameserverChecker,
+);
+
+$renewService = new RenewService(
+    websiteRepository: $websiteRepository,
+    certificateService: $certificateService,
+    verificationService: $certificateVerificationService,
+    nameserverChecker: $nameserverChecker,
 );
 
 $application = new Application(
-        name: 'ISPConfig DNS Certificate Manager',
-        version: '0.3.0',
+    name: 'ISPConfig DNS Certificate Manager',
+    version: '0.3.0',
 );
 
 $application->add(
-        new PreviewCertificateCommand(
-                certificateService: $certificateService,
-                apiClient: $apiClient,
-        ),
+    new PreviewCertificateCommand(
+        certificateService: $certificateService,
+        apiClient: $apiClient,
+    ),
 );
 
 $application->add(
-        new IssueCertificateCommand(
-                certificateService: $certificateService,
-                apiClient: $apiClient,
-        ),
+    new IssueCertificateCommand(
+        certificateService: $certificateService,
+        apiClient: $apiClient,
+    ),
 );
 
 $application->add(
-        new DoctorCommand(
-                doctorService: $doctorService,
-        ),
+    new DoctorCommand(
+        doctorService: $doctorService,
+    ),
 );
 
 $application->add(
@@ -131,6 +143,12 @@ $application->add(
     ),
 );
 
-
+$application->add(
+    new RenewCertificateCommand(
+        renewService: $renewService,
+        websiteRepository: $websiteRepository,
+        apiClient: $apiClient,
+    ),
+);
 
 exit($application->run());

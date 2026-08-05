@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Certificate\CertificateFactory;
 use App\Certificate\CertificateReader;
 use App\Domain\Hostname;
+use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
 
 final readonly class CertificateVerificationService
@@ -18,14 +21,20 @@ final readonly class CertificateVerificationService
 
     public function verify(Hostname $hostname): VerificationReport
     {
-        $website = $this->websiteRepository->findByDomain($hostname);
+        return $this->verifyWebsite(
+            $this->websiteRepository->findByDomain($hostname),
+        );
+    }
+
+    public function verifyWebsite(Website $website): VerificationReport
+    {
         $certificate = $this->certificateFactory->fromWebsite($website);
 
         $certificatePath = $certificate->certificatePath;
         $keyPath = $certificate->keyPath;
 
         if (!is_file($certificatePath)) {
-            $legacyCertificatePath = \sprintf(
+            $legacyCertificatePath = sprintf(
                 '%s/ssl/%s-le.crt',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -37,7 +46,7 @@ final readonly class CertificateVerificationService
         }
 
         if (!is_file($keyPath)) {
-            $legacyKeyPath = \sprintf(
+            $legacyKeyPath = sprintf(
                 '%s/ssl/%s-le.key',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -67,7 +76,7 @@ final readonly class CertificateVerificationService
         $checks[] = new VerificationCheck(
             name: 'Gültigkeitszeitraum',
             successful: $info->isCurrentlyValid(),
-            message: \sprintf(
+            message: sprintf(
                 '%s bis %s (%d Tage verbleibend)',
                 $info->validFrom->format('d.m.Y H:i:s'),
                 $info->validUntil->format('d.m.Y H:i:s'),
@@ -82,10 +91,10 @@ final readonly class CertificateVerificationService
 
         $checks[] = new VerificationCheck(
             name: 'Zertifikatsnamen',
-            successful: [] === $missingHostnames,
-            message: [] === $missingHostnames
+            successful: $missingHostnames === [],
+            message: $missingHostnames === []
                 ? implode(', ', $info->subjectAlternativeNames)
-                : \sprintf(
+                : sprintf(
                     'Fehlend: %s',
                     implode(', ', $missingHostnames),
                 ),

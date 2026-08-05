@@ -4,6 +4,9 @@ namespace App\Config;
 
 final readonly class Configuration
 {
+    /**
+     * @param list<string> $managedNameservers
+     */
     public function __construct(
         public string $ispconfigServer,
         public string $ispconfigUsername,
@@ -11,6 +14,7 @@ final readonly class Configuration
         public string $acmeExecutable,
         public string $dnsProvider,
         public int $dnsSleep,
+        public array $managedNameservers,
     ) {
     }
 
@@ -45,6 +49,10 @@ final readonly class Configuration
             acmeExecutable: self::requiredString($normalizedConfig, 'acme'),
             dnsProvider: self::requiredString($normalizedConfig, 'dns_provider'),
             dnsSleep: self::requiredInt($normalizedConfig, 'dns_sleep'),
+            managedNameservers: self::requiredStringList(
+                $normalizedConfig,
+                'managed_nameservers',
+            ),
         );
     }
 
@@ -74,5 +82,37 @@ final readonly class Configuration
         }
 
         return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return list<string>
+     */
+    private static function requiredStringList(
+        array $config,
+        string $key,
+    ): array {
+        $value = $config[$key] ?? null;
+
+        if (!\is_array($value) || [] === $value) {
+            throw new \RuntimeException(\sprintf('Der Konfigurationswert "%s" fehlt oder ist ungültig.', $key));
+        }
+
+        $values = [];
+
+        foreach ($value as $entry) {
+            if (!\is_string($entry) || '' === trim($entry)) {
+                throw new \RuntimeException(\sprintf('Der Konfigurationswert "%s" enthält einen ungültigen Eintrag.', $key));
+            }
+
+            $normalized = strtolower(rtrim(trim($entry), '.'));
+
+            if (!\in_array($normalized, $values, true)) {
+                $values[] = $normalized;
+            }
+        }
+
+        return $values;
     }
 }

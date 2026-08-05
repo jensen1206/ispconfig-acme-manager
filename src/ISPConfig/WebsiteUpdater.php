@@ -8,11 +8,14 @@ final readonly class WebsiteUpdater
 {
     public function __construct(
         private ApiClient $apiClient,
+        private WebsiteRepository $websiteRepository,
         private ClientIdResolver $clientIdResolver,
     ) {
     }
 
     /**
+     * Nur die Werte, die wir am vorhandenen Datensatz überschreiben.
+     *
      * @return array<string, string>
      */
     public function buildCertificateParameters(
@@ -21,6 +24,7 @@ final readonly class WebsiteUpdater
         return [
             'ssl' => 'y',
             'ssl_letsencrypt' => 'n',
+            'ssl_letsencrypt_exclude' => 'n',
             'ssl_domain' => $certificate->domain(),
             'ssl_cert' => $this->readRequiredFile(
                 $certificate->acmeCertificatePath(),
@@ -46,17 +50,88 @@ final readonly class WebsiteUpdater
     ): mixed {
         $clientId = $this->clientIdResolver->resolve($website);
 
+        /*
+         * ISPConfig erwartet beim Website-Update einen vollständigen
+         * Parametersatz. Deshalb laden wir zuerst den aktuellen Datensatz.
+         */
+        $parameters = $this->websiteRepository->findRawById(
+            $website->id,
+        );
+
+        /*
+         * Diese Verwaltungsfelder gehören nicht in das params-Array.
+         */
+        foreach ([
+            'domain_id',
+            'sys_userid',
+            'sys_groupid',
+            'sys_perm_user',
+            'sys_perm_group',
+            'sys_perm_other',
+            'added_date',
+            'added_by',
+        ] as $field) {
+            unset($parameters[$field]);
+        }
+
+        foreach (
+            $this->buildCertificateParameters($certificate) as $field => $value
+        ) {
+            $parameters[$field] = $value;
+        }
+
         $result = $this->apiClient->updateWebsite(
             clientId: $clientId,
             domainId: $website->id,
-            parameters: $this->buildCertificateParameters($certificate),
+            parameters: $parameters,
         );
 
-        if (false === $result || null === $result) {
-            throw new \RuntimeException(\sprintf('ISPConfig konnte die Website "%s" nicht aktualisieren.', $website->domain()));
-        }
+        $this->assertCertificateWasSaved(
+            website: $website,
+            certificate: $certificate,
+        );
 
         return $result;
+    }
+
+    private function assertCertificateWasSaved(
+        Website $website,
+        Certificate $certificate,
+    ): void {
+        $updated = $this->websiteRepository->findRawById(
+            $website->id,
+        );
+
+        $ssl = $updated['ssl'] ?? null;
+        $letsEncrypt = $updated['ssl_letsencrypt'] ?? null;
+        $sslDomain = $updated['ssl_domain'] ?? null;
+        $certificateContent = $updated['ssl_cert'] ?? null;
+        $bundleContent = $updated['ssl_bundle'] ?? null;
+        $keyContent = $updated['ssl_key'] ?? null;
+
+        if ('y' !== $ssl) {
+            throw new \RuntimeException('ISPConfig hat SSL nicht aktiviert.');
+        }
+
+        if ('n' !== $letsEncrypt) {
+            throw new \RuntimeException('ISPConfig Let’s Encrypt wurde nicht deaktiviert.');
+        }
+
+        if ($sslDomain !== $certificate->domain()) {
+            throw new \RuntimeException(\sprintf('ISPConfig hat eine unerwartete SSL-Domain gespeichert: %s', \is_string($sslDomain) ? $sslDomain : 'unbekannt'));
+        }
+
+        if (!\is_string($certificateContent) || '' === trim($certificateContent)) {
+            throw new \RuntimeException('ISPConfig hat das Zertifikat nicht gespeichert.');
+        }
+
+        if (!\is_string($bundleContent) || '' === trim($bundleContent)) {
+            throw new \RuntimeException('ISPConfig hat das CA-Bundle nicht gespeichert.');
+        }
+
+        if (!\is_string($keyContent) || '' === trim($keyContent)) {
+            throw new \RuntimeException('ISPConfig hat den privaten Schlüssel nicht gespeichert.');
+        }
     }
 
     private function readRequiredFile(string $path): string
