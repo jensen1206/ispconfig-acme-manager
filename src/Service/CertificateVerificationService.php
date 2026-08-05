@@ -1,11 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
 use App\Certificate\CertificateFactory;
 use App\Certificate\CertificateReader;
+use App\Certificate\LiveCertificateReader;
 use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
@@ -16,6 +15,7 @@ final readonly class CertificateVerificationService
         private WebsiteRepository $websiteRepository,
         private CertificateFactory $certificateFactory,
         private CertificateReader $certificateReader,
+        private LiveCertificateReader $liveCertificateReader,
     ) {
     }
 
@@ -34,7 +34,7 @@ final readonly class CertificateVerificationService
         $keyPath = $certificate->keyPath;
 
         if (!is_file($certificatePath)) {
-            $legacyCertificatePath = sprintf(
+            $legacyCertificatePath = \sprintf(
                 '%s/ssl/%s-le.crt',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -46,7 +46,7 @@ final readonly class CertificateVerificationService
         }
 
         if (!is_file($keyPath)) {
-            $legacyKeyPath = sprintf(
+            $legacyKeyPath = \sprintf(
                 '%s/ssl/%s-le.key',
                 rtrim($website->documentRoot, '/'),
                 $website->domain(),
@@ -58,6 +58,9 @@ final readonly class CertificateVerificationService
         }
 
         $info = $this->certificateReader->read($certificatePath);
+        $liveInfo = $this->liveCertificateReader->read(
+            $website->domain(),
+        );
 
         $checks = [];
 
@@ -76,7 +79,7 @@ final readonly class CertificateVerificationService
         $checks[] = new VerificationCheck(
             name: 'Gültigkeitszeitraum',
             successful: $info->isCurrentlyValid(),
-            message: sprintf(
+            message: \sprintf(
                 '%s bis %s (%d Tage verbleibend)',
                 $info->validFrom->format('d.m.Y H:i:s'),
                 $info->validUntil->format('d.m.Y H:i:s'),
@@ -91,10 +94,10 @@ final readonly class CertificateVerificationService
 
         $checks[] = new VerificationCheck(
             name: 'Zertifikatsnamen',
-            successful: $missingHostnames === [],
-            message: $missingHostnames === []
+            successful: [] === $missingHostnames,
+            message: [] === $missingHostnames
                 ? implode(', ', $info->subjectAlternativeNames)
-                : sprintf(
+                : \sprintf(
                     'Fehlend: %s',
                     implode(', ', $missingHostnames),
                 ),
@@ -113,9 +116,74 @@ final readonly class CertificateVerificationService
                 : 'Privater Schlüssel passt nicht zum Zertifikat.',
         );
 
+        $checks[] = new VerificationCheck(
+            name: 'Live-Zertifikat erreichbar',
+            successful: $liveInfo->isCurrentlyValid(),
+            message: \sprintf(
+                '%s bis %s',
+                $liveInfo->validFrom->format('d.m.Y H:i:s'),
+                $liveInfo->validUntil->format('d.m.Y H:i:s'),
+            ),
+        );
+
+        $fingerprintsMatch = hash_equals(
+            $info->fingerprint,
+            $liveInfo->fingerprint,
+        );
+
+        $checks[] = new VerificationCheck(
+            name: 'Live-Fingerprint',
+            successful: $fingerprintsMatch,
+            message: $fingerprintsMatch
+                ? 'Lokales und ausgeliefertes Zertifikat sind identisch.'
+                : \sprintf(
+                    'Abweichung: lokal %s, live %s',
+                    $info->fingerprint,
+                    $liveInfo->fingerprint,
+                ),
+        );
+
+        $checks[] = new VerificationCheck(
+            name: 'Live-Zertifikatsnamen',
+            successful: $this->sameStringSet(
+                $info->subjectAlternativeNames,
+                $liveInfo->subjectAlternativeNames,
+            ),
+            message: implode(
+                ', ',
+                $liveInfo->subjectAlternativeNames,
+            ),
+        );
+
+        $checks[] = new VerificationCheck(
+            name: 'Live-Aussteller',
+            successful: $info->issuer === $liveInfo->issuer,
+            message: $liveInfo->issuer,
+        );
+
+        $checks[] = new VerificationCheck(
+            name: 'Live-Ablaufdatum',
+            successful: $info->validUntil->getTimestamp()
+            === $liveInfo->validUntil->getTimestamp(),
+            message: $liveInfo->validUntil->format('d.m.Y H:i:s'),
+        );
+
         return new VerificationReport(
             certificateInfo: $info,
             checks: $checks,
+            liveCertificateInfo: $liveInfo,
         );
+    }
+
+    /**
+     * @param list<string> $left
+     * @param list<string> $right
+     */
+    private function sameStringSet(array $left, array $right): bool
+    {
+        sort($left);
+        sort($right);
+
+        return $left === $right;
     }
 }

@@ -24,6 +24,7 @@ use Symfony\Component\HttpClient\HttpClient;
 use App\Command\RenewCertificateCommand;
 use App\Service\RenewService;
 use App\Dns\NameserverChecker;
+use App\Certificate\LiveCertificateReader;
 
 require dirname(__DIR__).'/vendor/autoload.php';
 
@@ -67,10 +68,16 @@ $websiteUpdater = new WebsiteUpdater(
 
 $certificateReader = new CertificateReader();
 
+$liveCertificateReader = new LiveCertificateReader(
+    processRunner: $processRunner,
+    certificateReader: $certificateReader,
+);
+
 $certificateVerificationService = new CertificateVerificationService(
     websiteRepository: $websiteRepository,
     certificateFactory: $certificateFactory,
     certificateReader: $certificateReader,
+    liveCertificateReader: $liveCertificateReader,
 );
 
 $nameserverChecker = new NameserverChecker(
