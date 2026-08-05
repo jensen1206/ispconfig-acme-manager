@@ -1,5 +1,7 @@
 # ISPConfig ACME Manager
 
+![CI](https://github.com/jensen1206/ispconfig-acme-manager/actions/workflows/ci.yml/badge.svg)
+
 A modern PHP CLI application for automated ACME certificate management on ISPConfig servers.
 
 Unlike the default ISPConfig Let's Encrypt integration, ISPConfig ACME Manager focuses on **DNS-01 validation**, making certificate management more reliable while remaining fully compatible with future ISPConfig updates by using the official Remote API.
