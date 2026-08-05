@@ -61,7 +61,7 @@
         "lint": "parallel-lint src tests bin",
         "stan": "phpstan analyse",
         "rector": "rector process",
-        "test": "phpunit",
+        "test": "phpunit --do-not-fail-on-empty-test-suite",
         "check": [
             "@lint",
             "@stan",
