@@ -5,6 +5,7 @@ namespace App\ISPConfig;
 use App\Config\Configuration;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Throwable;
 
 final class ApiClient
 {
@@ -81,6 +82,18 @@ final class ApiClient
                 'params' => $parameters,
             ],
         );
+    }
+
+    public function logoutSilently(): void
+    {
+        try {
+            $this->logout();
+        } catch (Throwable) {
+            /*
+             * Ein Logout-Fehler darf den ursprünglichen Exit-Code und die
+             * eigentliche Fehlermeldung des Commands nicht überschreiben.
+             */
+        }
     }
 
     /**
