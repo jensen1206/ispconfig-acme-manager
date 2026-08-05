@@ -156,7 +156,7 @@ final class VerifyCertificateCommand extends Command
 
             return Command::FAILURE;
         } finally {
-            $this->apiClient->logout();
+            $this->apiClient->logoutSilently();
         }
     }
 }

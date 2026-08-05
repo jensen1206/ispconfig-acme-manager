@@ -143,7 +143,7 @@ final class UpdateWebsiteCommand extends Command
 
             return Command::FAILURE;
         } finally {
-            $this->apiClient->logout();
+            $this->apiClient->logoutSilently();
         }
     }
 }

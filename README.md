@@ -2,378 +2,122 @@
 
 ![CI](https://github.com/jensen1206/ispconfig-acme-manager/actions/workflows/ci.yml/badge.svg)
 
-A modern PHP CLI application for automated ACME certificate management on ISPConfig servers.
+A modern PHP CLI application that automatically issues, installs, verifies and renews ACME certificates for **ISPConfig** using the **official ISPConfig Remote API** and **DNS-01 validation**.
 
-Unlike the default ISPConfig Let's Encrypt integration, ISPConfig ACME Manager focuses on **DNS-01 validation**, making certificate management more reliable while remaining fully compatible with future ISPConfig updates by using the official Remote API.
+> **Project Status:** Production Ready (v0.7.0)
 
-> **Project Status:** Active Development (v0.4.0)
+## Why?
 
----
+ISPConfig ACME Manager is designed to work alongside ISPConfig without modifying the ISPConfig core.
 
-# Features
+### Features
 
-## Implemented
-
-- Modern Symfony Console CLI
-- Official ISPConfig Remote API integration
-- Website discovery
-- DNS-01 certificate issuance
+- Official ISPConfig Remote API
+- DNS-01 validation using acme.sh
 - Automatic certificate installation
-- Automatic ISPConfig website update
+- Automatic ISPConfig update
 - Automatic Let's Encrypt deactivation
 - Local certificate verification
+- Live certificate verification
 - Intelligent renewal
 - Bulk renewal
 - Dry Run mode
+- Cron mode
 - External DNS detection
-- Wildcard certificate support
-- Certificate preview
-- Environment diagnostics (`doctor`)
-- Update debug mode
-- Strong typing
-- PHP Enums
-- Value Objects
-- PHPStan Level Max
-- Rector
+- Wildcard support
+- Doctor command
+- GitHub Actions
 - PHPUnit
+- PHPStan
+- Rector
 - PHP-CS-Fixer
 
----
-
-# Commands
-
-Show all commands
-
-```bash
-php bin/ispconfig-dns-cert list
-```
-
-Preview certificate creation
-
-```bash
-php bin/ispconfig-dns-cert preview example.com
-```
-
-Issue a certificate
-
-```bash
-php bin/ispconfig-dns-cert issue example.com
-```
-
-Verify a certificate
-
-```bash
-php bin/ispconfig-dns-cert verify example.com
-```
-
-Renew a single certificate
-
-```bash
-php bin/ispconfig-dns-cert renew example.com
-```
-
-Renew all managed certificates
-
-```bash
-php bin/ispconfig-dns-cert renew --all
-```
-
-Preview renewal without changing anything
-
-```bash
-php bin/ispconfig-dns-cert renew --all --dry-run
-```
-
-Update website certificate
-
-```bash
-php bin/ispconfig-dns-cert update example.com
-```
-
-Show update payload
-
-```bash
-php bin/ispconfig-dns-cert update-debug example.com
-```
-
-Run diagnostics
+## Commands
 
 ```bash
 php bin/ispconfig-dns-cert doctor
-```
-
----
-
-# Workflow
-
-The complete certificate lifecycle is fully automated.
-
-```
-Preview
-    │
-    ▼
-Issue
-    │
-    ▼
-DNS-01 Validation
-    │
-    ▼
-Certificate Installation
-    │
-    ▼
-ISPConfig Remote API Update
-    │
-    ▼
-Automatic Let's Encrypt Disable
-    │
-    ▼
-Certificate Verification
-```
-
----
-
-# Intelligent Renewal
-
-Certificates are only renewed when necessary.
-
-The renewal process automatically checks
-
-- Certificate validity
-- Remaining lifetime
-- Private key
-- Subject Alternative Names
-- Certificate files
-- External DNS management
-
-Example
-
-```bash
+php bin/ispconfig-dns-cert preview example.com
+php bin/ispconfig-dns-cert issue example.com
+php bin/ispconfig-dns-cert verify example.com
+php bin/ispconfig-dns-cert renew example.com
+php bin/ispconfig-dns-cert renew --all
 php bin/ispconfig-dns-cert renew --all --dry-run
+php bin/ispconfig-dns-cert renew --all --cron
+php bin/ispconfig-dns-cert update example.com
+php bin/ispconfig-dns-cert update-debug example.com
 ```
 
-Example output
-
-```
-✔ wiecker.eu              valid
-✔ art-picturedesign.de    valid
-⚠ cms.wiecker.eu          would renew
-⏭ harz-web24.de          external DNS
-```
-
-No certificates are requested during a dry run.
-
----
-
-# External DNS Detection
-
-Domains whose DNS is not managed by ISPConfig are automatically detected.
-
-Example
-
-```
-harz-web24.de
-
-Nameservers
-
-ns81.domaincontrol.com
-ns82.domaincontrol.com
-
-Status
-
-External DNS
-
-Skipped
-```
-
-This prevents unnecessary ACME requests and avoids DNS validation failures.
-
----
-
-# Requirements
+## Requirements
 
 - PHP 8.2+
 - Composer
 - ISPConfig 3.3+
 - acme.sh
 - Apache
-- DNS zones managed by ISPConfig
+- Linux
 
----
-
-# Installation
-
-Clone the repository
+## Installation
 
 ```bash
 git clone https://github.com/jensen1206/ispconfig-acme-manager.git
-```
-
-Install dependencies
-
-```bash
+cd ispconfig-acme-manager
 composer install
-```
-
-Create the configuration
-
-```bash
 cp config/example.php /etc/ispconfig-dns-cert.php
 chmod 600 /etc/ispconfig-dns-cert.php
 ```
 
----
+## Cron
 
-# Configuration
-
-```php
-<?php
-
-return [
-
-    'server' => 'https://server.example.com:8080',
-
-    'username' => 'acme-manager',
-
-    'password' => 'change-me',
-
-    'acme' => '/root/.acme.sh/acme.sh',
-
-    'dns_provider' => 'dns_ispconfig',
-
-    'dns_sleep' => 120,
-
-    'managed_nameservers' => [
-
-        'ns1.example.com',
-
-        'ns2.example.com',
-
-    ],
-
-];
+```cron
+0 3 * * * flock -n /var/run/ispconfig-dns-cert.lock bash -c 'cd /opt/ispconfig-dns-cert && /usr/bin/php bin/ispconfig-dns-cert renew --all --cron >> /var/log/ispconfig-dns-cert-cron.log 2>&1'
 ```
 
----
+Example output:
 
-# Architecture
-
-```
-Symfony Console
-        │
-        ▼
-Commands
-        │
-        ▼
-Services
-        │
-        ├───────────────┐
-        ▼               ▼
-ISPConfig          Certificate
-        │               │
-        ▼               ▼
-Remote API      ACME Manager
-        │               │
-        └──────┬────────┘
-               ▼
-        Process Runner
-               │
-               ▼
-            acme.sh
+```text
+[SUMMARY]
+checked=30
+valid=28
+renewed=0
+ssl_disabled=1
+external_dns=1
+failed=0
+duration=0.92 s
 ```
 
----
-
-# Design Goals
-
-- No ISPConfig core modifications
-- No direct database updates
-- Official ISPConfig Remote API only
-- Fully update compatible
-- Object-oriented architecture
-- Strong typing
-- Readonly classes
-- Value Objects
-- Enums
-- PSR-12
-- PHPStan Level Max
-
----
-
-# Development
-
-Format code
+## Development
 
 ```bash
+composer validate --strict
+composer lint
+composer stan
+composer test
+composer check
+composer rector
 composer fix
 ```
 
-Run syntax checks
+## Roadmap
 
-```bash
-composer lint
-```
+### v0.7
+- Watch command
+- Automatic certificate provisioning
+- Production improvements
 
-Run static analysis
+### v0.8
+- Additional DNS providers
 
-```bash
-composer stan
-```
-
-Run tests
-
-```bash
-composer test
-```
-
-Run Rector
-
-```bash
-composer rector
-```
-
----
-
-# Current Roadmap
-
-## Version 0.5
-
-- Live certificate verification
-- GitHub Actions
-- Logging
-
-## Version 0.6
-
-- ZeroSSL support
-- Google Trust Services
-- SSL.com
-- Buypass
-
-## Version 1.0
-
+### v1.0
 - Stable release
-- Packagist
 - Complete documentation
+- Packagist
 
----
+## License
 
-# Contributing
+MIT
 
-Contributions, ideas and bug reports are welcome.
-
-Please open an issue before implementing larger features.
-
----
-
-# License
-
-MIT License
-
----
-
-# Maintainer
+## Maintainer
 
 **Jens Wiecker**
 
-Full Stack Developer
-
-🌐 https://wiecker.eu
+https://wiecker.eu
