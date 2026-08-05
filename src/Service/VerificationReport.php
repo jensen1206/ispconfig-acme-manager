@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Certificate\CertificateInfo;
@@ -12,6 +14,7 @@ final readonly class VerificationReport
     public function __construct(
         public CertificateInfo $certificateInfo,
         public array $checks,
+        public ?CertificateInfo $liveCertificateInfo = null,
     ) {
     }
 

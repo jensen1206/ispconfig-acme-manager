@@ -24,7 +24,7 @@ final class VerifyCertificateCommand extends Command
     {
         $this
             ->setDescription(
-                'Prüft das installierte Zertifikat einer ISPConfig-Website.',
+                'Prüft das lokale und das live ausgelieferte Zertifikat einer ISPConfig-Website.',
             )
             ->addArgument(
                 name: 'domain',
@@ -54,29 +54,76 @@ final class VerifyCertificateCommand extends Command
                 new Hostname($domain),
             );
 
-            $info = $report->certificateInfo;
+            $localInfo = $report->certificateInfo;
+            $liveInfo = $report->liveCertificateInfo;
 
             $io->title('ISPConfig Zertifikatsprüfung');
 
-            $io->section('Zertifikatsinformationen');
+            $io->section('Lokales Zertifikat');
 
             $io->definitionList(
-                ['Common Name' => $info->commonName],
-                ['Aussteller' => $info->issuer],
+                ['Common Name' => $localInfo->commonName],
+                ['Aussteller' => $localInfo->issuer],
                 [
-                    'Gültig ab' => $info->validFrom->format('d.m.Y H:i:s'),
+                    'Gültig ab' => $localInfo->validFrom->format('d.m.Y H:i:s'),
                 ],
                 [
-                    'Gültig bis' => $info->validUntil->format('d.m.Y H:i:s'),
+                    'Gültig bis' => $localInfo->validUntil->format('d.m.Y H:i:s'),
                 ],
                 [
-                    'Restlaufzeit' => \sprintf('%d Tage', $info->daysUntilExpiration()),
+                    'Restlaufzeit' => \sprintf(
+                        '%d Tage',
+                        $localInfo->daysUntilExpiration(),
+                    ),
                 ],
-                ['SHA-256' => $info->fingerprint],
+                ['SHA-256' => $localInfo->fingerprint],
             );
 
-            $io->section('Subject Alternative Names');
-            $io->listing($info->subjectAlternativeNames);
+            $io->section('Lokale Subject Alternative Names');
+
+            if ([] === $localInfo->subjectAlternativeNames) {
+                $io->warning(
+                    'Das lokale Zertifikat enthält keine Subject Alternative Names.',
+                );
+            } else {
+                $io->listing(
+                    $localInfo->subjectAlternativeNames,
+                );
+            }
+
+            if (null !== $liveInfo) {
+                $io->section('Live-Zertifikat');
+
+                $io->definitionList(
+                    ['Common Name' => $liveInfo->commonName],
+                    ['Aussteller' => $liveInfo->issuer],
+                    [
+                        'Gültig ab' => $liveInfo->validFrom->format('d.m.Y H:i:s'),
+                    ],
+                    [
+                        'Gültig bis' => $liveInfo->validUntil->format('d.m.Y H:i:s'),
+                    ],
+                    [
+                        'Restlaufzeit' => \sprintf(
+                            '%d Tage',
+                            $liveInfo->daysUntilExpiration(),
+                        ),
+                    ],
+                    ['SHA-256' => $liveInfo->fingerprint],
+                );
+
+                $io->section('Live Subject Alternative Names');
+
+                if ([] === $liveInfo->subjectAlternativeNames) {
+                    $io->warning(
+                        'Das live ausgelieferte Zertifikat enthält keine Subject Alternative Names.',
+                    );
+                } else {
+                    $io->listing(
+                        $liveInfo->subjectAlternativeNames,
+                    );
+                }
+            }
 
             $io->section('Prüfungen');
 
@@ -100,7 +147,7 @@ final class VerifyCertificateCommand extends Command
             }
 
             $io->success(
-                'Das lokale Zertifikat wurde erfolgreich geprüft.',
+                'Das lokale und das live ausgelieferte Zertifikat wurden erfolgreich geprüft.',
             );
 
             return Command::SUCCESS;
