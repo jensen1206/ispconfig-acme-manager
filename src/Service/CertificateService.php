@@ -75,8 +75,16 @@ final readonly class CertificateService
             certificate: $plan->certificate,
         );
 
+        /*
+         * Direkt nach Installation und Apache-Reload wird nur der lokale
+         * Zertifikatszustand geprüft.
+         *
+         * Eine sofortige Live-TLS-Prüfung kann kurzzeitig fehlschlagen,
+         * obwohl das Zertifikat korrekt installiert wurde.
+         */
         $verificationReport = $this->verificationService->verifyWebsite(
-            $website,
+            website: $plan->website,
+            includeLiveCertificate: false,
         );
 
         return new CertificateIssueResult(
