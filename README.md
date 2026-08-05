@@ -39,6 +39,67 @@ php bin/ispconfig-dns-cert doctor
 php bin/ispconfig-dns-cert watch example.com
 ```
 
+### Verify your installation
+
+```bash
+php bin/ispconfig-dns-cert doctor
+```
+
+### Manage a single website
+
+Automatically issue or renew the certificate if required.
+
+```bash
+php bin/ispconfig-dns-cert watch example.com
+```
+
+### Check all websites
+
+Verify all managed websites and automatically issue or renew certificates when required.
+
+```bash
+php bin/ispconfig-dns-cert watch --all
+```
+
+### Dry Run
+
+Preview all required actions without making any changes.
+
+```bash
+php bin/ispconfig-dns-cert watch --all --dry-run
+```
+
+### Automated Cron Mode
+
+Run the watcher in unattended mode.
+
+```bash
+php bin/ispconfig-dns-cert watch --all --cron
+```
+
+> [!TIP]
+> **Recommended Workflow**
+>
+> The `watch` command is the recommended way to manage certificates.
+>
+> It automatically decides whether to:
+>
+> - issue a new certificate when required
+> - renew an existing certificate when required
+> - leave the current certificate unchanged
+>
+> For most users, the following commands are all that is needed:
+>
+> ```bash
+> php bin/ispconfig-dns-cert watch example.com
+> php bin/ispconfig-dns-cert watch --all
+> php bin/ispconfig-dns-cert watch --all --dry-run
+> php bin/ispconfig-dns-cert watch --all --cron
+> ```
+>
+> The `issue` and `renew` commands are available for advanced or manual workflows. For most users, the `watch` command is the recommended entry point.
+
+
 ## Commands
 
 - doctor
