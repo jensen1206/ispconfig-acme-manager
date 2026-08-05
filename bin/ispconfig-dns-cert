@@ -25,6 +25,8 @@ use App\Command\RenewCertificateCommand;
 use App\Service\RenewService;
 use App\Dns\NameserverChecker;
 use App\Certificate\LiveCertificateReader;
+use App\Service\WebsiteWatcher;
+use App\Command\WatchCommand;
 
 require dirname(__DIR__).'/vendor/autoload.php';
 
@@ -100,6 +102,11 @@ $renewService = new RenewService(
     nameserverChecker: $nameserverChecker,
 );
 
+$websiteWatcher = new WebsiteWatcher(
+    websiteRepository: $websiteRepository,
+    renewService: $renewService,
+);
+
 $application = new Application(
     name: 'ISPConfig DNS Certificate Manager',
     version: '0.3.0',
@@ -154,6 +161,13 @@ $application->add(
     new RenewCertificateCommand(
         renewService: $renewService,
         websiteRepository: $websiteRepository,
+        apiClient: $apiClient,
+    ),
+);
+
+$application->add(
+    new WatchCommand(
+        websiteWatcher: $websiteWatcher,
         apiClient: $apiClient,
     ),
 );
