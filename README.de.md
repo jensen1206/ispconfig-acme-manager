@@ -1,4 +1,4 @@
-# ISPConfig ACME Manager 1.0.3
+# ISPConfig ACME Manager 1.0.4
 
 PHP-CLI für DNS-01-Zertifikate mit acme.sh und der ISPConfig Remote API. PHP 8.2+, PHP-OpenSSL, OpenSSL CLI und die bestehenden Composer-Abhängigkeiten werden benötigt.
 
@@ -83,3 +83,9 @@ Die Schlüssel `dashboard_certificate`, `dashboard_key` und `dashboard_reload_co
 Vor dem Installieren werden ACME-Zertifikat, SAN, Kette, CRL und Schlüssel geprüft. Ein gültiger, ausreichend lang laufender ACME-Bestand wird wiederverwendet. Unbekannter Widerrufsstatus führt ohne explizites `--force` zu keiner Neuausstellung. Nach Installation/Reload werden Zieldateien und das öffentliche Zertifikat mit konfigurierbarem Timeout geprüft. Eine erfolgreiche acme.sh-Rückgabe allein ist kein Installationserfolg. Es gelten dieselben Sperren und Cooldowns wie für Website-Aktionen, mit einer getrennten Dashboard-Kennung. `--force` umgeht diese Sperren nicht.
 
 `dashboard:renew` verändert Panel-Zertifikatsdateien und kann den konfigurierten Dienst neu laden. Es ist kein Diagnosebefehl und wird nicht automatisch von `watch` ausgeführt. Bei einem Fehler erfolgt keine automatische Wiederholung oder Rücksetzung. Bereits bestehende acme.sh-Cronjobs und gespeicherte Reload-Hooks bleiben bestehen.
+
+## VHost-Dateiauswahl (ab 1.0.4)
+
+Bei lesbarer generierter HTTPS-VHost-Konfiguration verwendet die lokale Prüfung deren explizite `SSLCertificateFile`- und `SSLCertificateKeyFile`-Pfade als Paar. Zusätzliche alte `.crt`-/`.key`-Dateien beeinflussen diesen Befund nicht. Die Live-Prüfung bleibt notwendig: Eine Konfigurationsdatei allein beweist nicht, dass Apache sie geladen hat.
+
+Includes, Makros, dynamische Bedingungen, mehrere unterschiedliche Paare oder fehlende Zuordnungen werden konservativ als nicht eindeutig prüfbar gemeldet. Ohne VHost-Datei bleibt die konventionelle Dateisuche nur erlaubt, wenn keine konkurrierenden normalen und `-le`-Dateien vorliegen. ACME-Quellprüfungen bleiben hiervon getrennt. Bei Wiederinstallation wird ausschließlich das validierte Paar verwendet; generierte VHosts werden nicht verändert.

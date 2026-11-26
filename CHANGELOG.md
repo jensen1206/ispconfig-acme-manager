@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog.
 
+## [1.0.4] - 2026-11-26
+
+### Fixed
+- Select the certificate/key pair explicitly referenced by the generated port-443 VHost before falling back to conventional paths.
+- Refuse ambiguous or dynamic VHost mappings instead of treating inactive certificate files as renewal candidates.
+- Keep verified file paths through reinstallation and reject unverified alternative source paths.
+- Regression coverage for a revoked inactive `.crt` alongside a valid, publicly served `-le.crt`.
+
 ## [1.0.3] - 2026-11-26
 
 ### Added

@@ -90,7 +90,13 @@ final readonly class CertificateService
         $this->verificationService->assertLocal($website);
         $certificate = $this->certificateFactory->fromWebsite($website);
         $local = $this->verificationService->verifyWebsite($website, false);
-        $useLocal = is_file($certificate->certificatePath) && is_file($certificate->keyPath) && $local->scopeSuccessful('local');
+        $useLocal = $local->scopeSuccessful('local') && null !== $local->localCertificatePath && null !== $local->localKeyPath;
+        if ($useLocal) {
+            $certificate = new \App\Certificate\Certificate(
+                $certificate->primaryHostname, $certificate->hostnames, $local->localKeyPath, $local->localCertificatePath,
+                $certificate->acmeDirectory, $certificate->keyType, $certificate->certificateAuthority, $certificate->challengeType,
+            );
+        }
 
         return $this->installation->install($website, $certificate, !$useLocal);
     }

@@ -13,6 +13,8 @@ final readonly class VerificationReport
         public ?CertificateInfo $certificateInfo,
         public array $checks,
         public ?CertificateInfo $liveCertificateInfo = null,
+        public ?string $localCertificatePath = null,
+        public ?string $localKeyPath = null,
     ) {
     }
 
@@ -40,7 +42,7 @@ final readonly class VerificationReport
             }
         }
 
-return $status;
+        return $status;
     }
 
     public function scopeSuccessful(string $scope): bool
