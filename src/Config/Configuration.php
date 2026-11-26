@@ -26,6 +26,9 @@ final readonly class Configuration
         public string $caFile = '',
         public string $vhostDirectory = '/etc/apache2/sites-available',
         public bool $automaticRepair = false,
+        public string $dashboardCertificatePath = '/usr/local/ispconfig/interface/ssl/ispserver.crt',
+        public string $dashboardKeyPath = '/usr/local/ispconfig/interface/ssl/ispserver.key',
+        public string $dashboardReloadCommand = 'systemctl reload apache2',
     ) {
         if ($localServerId < 0 || min($installationTimeout, $pollInterval, $networkTimeout, $retryCooldown) < 1) {
             throw new \InvalidArgumentException('Server-ID oder Zeitlimits ungültig.');
@@ -74,11 +77,35 @@ final readonly class Configuration
             caFile: \array_key_exists('ca_file', $normalizedConfig) ? self::requiredString($normalizedConfig, 'ca_file') : '',
             vhostDirectory: self::requiredString($normalizedConfig + ['vhost_directory' => '/etc/apache2/sites-available'], 'vhost_directory'),
             automaticRepair: ($normalizedConfig['automatic_repair'] ?? false) === true,
+            dashboardCertificatePath: self::requiredString($normalizedConfig + ['dashboard_certificate' => '/usr/local/ispconfig/interface/ssl/ispserver.crt'], 'dashboard_certificate'),
+            dashboardKeyPath: self::requiredString($normalizedConfig + ['dashboard_key' => '/usr/local/ispconfig/interface/ssl/ispserver.key'], 'dashboard_key'),
+            dashboardReloadCommand: self::requiredString($normalizedConfig + ['dashboard_reload_command' => 'systemctl reload apache2'], 'dashboard_reload_command'),
             managedNameservers: self::requiredStringList(
                 $normalizedConfig,
                 'managed_nameservers',
             ),
         );
+    }
+
+    public function dashboardHostname(): string
+    {
+        $host = parse_url($this->ispconfigServer, \PHP_URL_HOST);
+        if (!\is_string($host) || '' === $host || 'https' !== parse_url($this->ispconfigServer, \PHP_URL_SCHEME)) {
+            throw new \InvalidArgumentException('Das Dashboard benötigt eine gültige HTTPS-Serveradresse.');
+        }
+
+        return (new \App\Domain\Hostname($host))->value();
+    }
+
+    public function dashboardPort(): int
+    {
+        $this->dashboardHostname();
+        $port = parse_url($this->ispconfigServer, \PHP_URL_PORT) ?? 443;
+        if (!\is_int($port) || $port < 1) {
+            throw new \InvalidArgumentException('Ungültiger Dashboard-Port.');
+        }
+
+        return $port;
     }
 
     /**

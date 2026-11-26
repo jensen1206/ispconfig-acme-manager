@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog.
 
+## [1.0.3] - 2026-11-26
+
+### Added
+- Restore the production-only `dashboard:renew` command, including `--force`, `--yes` and dashboard configuration keys.
+- Validate dashboard ACME material before installation and poll public TLS on the configured panel port afterward.
+- Reuse valid certificates, protect dashboard actions with cooldowns, and suppress sensitive reload errors.
+- Regression tests for confirmation, custom paths/reload, delayed TLS, unknown CRLs, wrong keys and installation failures.
+
 ## [1.0.2] - 2026-11-26
 
 ### Added

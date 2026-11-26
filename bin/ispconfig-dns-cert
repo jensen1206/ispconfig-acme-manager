@@ -116,8 +116,17 @@ $websiteWatcher = new WebsiteWatcher(
 
 $application = new Application(
     name: 'ISPConfig DNS Certificate Manager',
-    version: '1.0.2',
+    version: '1.0.3',
 );
+
+$application->add(new \App\Command\RenewDashboardCertificateCommand(
+    new \App\Service\DashboardCertificateService(
+        $configuration, $acmeManager, $certificateReader, $liveCertificateReader,
+        new \App\Certificate\CertificateValidator($processRunner, HttpClient::create(), $configuration->networkTimeout, $configuration->caFile),
+        $nameserverChecker, $guard,
+    ),
+    $configuration,
+));
 
 $application->add(
     new PreviewCertificateCommand(

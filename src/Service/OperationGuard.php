@@ -18,11 +18,24 @@ final readonly class OperationGuard
      */
     public function run(Website $website, string $action, callable $operation): mixed
     {
+        return $this->runNamed($website->serverId.'-'.$website->id, $action, $operation);
+    }
+
+    /** @template T
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    public function runNamed(string $owner, string $action, callable $operation): mixed
+    {
+        if (!preg_match('/^[a-zA-Z0-9_-]+$/D', $owner)) {
+            throw new \InvalidArgumentException('Ungültige Sperrkennung.');
+        }
         $directory = $this->configuration->stateDirectory;
         if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
             throw new \RuntimeException('Aktionsstatus kann nicht gespeichert werden.');
         }
-        $path = $directory.'/'.$website->serverId.'-'.$website->id;
+        $path = $directory.'/'.$owner;
         $lock = fopen($path.'.lock', 'c+');
         if (false === $lock) {
             throw new \RuntimeException('Sperrdatei nicht verfügbar.');
