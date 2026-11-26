@@ -1,4 +1,4 @@
-# ISPConfig ACME Manager 1.0.4
+# ISPConfig ACME Manager 1.0.5
 
 PHP-CLI für DNS-01-Zertifikate mit acme.sh und der ISPConfig Remote API. PHP 8.2+, PHP-OpenSSL, OpenSSL CLI und die bestehenden Composer-Abhängigkeiten werden benötigt.
 
