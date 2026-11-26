@@ -42,26 +42,23 @@ final readonly class CertificateVerificationService
         $checks = [];
         $local = null;
         $live = null;
+        $path = null;
+        $key = null;
         try {
             $this->assertLocal($website);
             $path = $acmeSource ? $certificate->acmeFullChainPath() : $certificate->certificatePath;
             $key = $acmeSource ? $certificate->acmeKeyPath() : $certificate->keyPath;
-            // Legacy files are selected as a pair, never mixed with current files.
-            if (!$acmeSource && !is_file($path) && !is_file($key)) {
-                $legacy = $website->sslDirectory().'/'.$website->domain().'-le';
-                if (is_file($legacy.'.crt') && is_file($legacy.'.key')) {
-                    $path = $legacy.'.crt';
-                    $key = $legacy.'.key';
-                }
-            }
-            if (!is_file($path)) {
+            if (!$acmeSource) {
+                [$path, $key] = (new \App\Certificate\VhostCertificateLocator())->locate(
+                    $this->configuration->vhostDirectory.'/'.$website->domain().'.vhost', $path, $key);
+            }            if (!is_file($path)) {
                 // Distinguish absent files from an inaccessible ancestor. Never issue
                 // a replacement merely because permissions prevent inspection.
-                $ancestor = dirname($path);
-                while (!is_dir($ancestor) && dirname($ancestor) !== $ancestor) {
-                    $ancestor = dirname($ancestor);
+                $ancestor = \dirname($path);
+                while (!is_dir($ancestor) && \dirname($ancestor) !== $ancestor) {
+                    $ancestor = \dirname($ancestor);
                 }
-                if (!is_readable($ancestor) || (DIRECTORY_SEPARATOR === '/' && !is_executable($ancestor))) {
+                if (!is_readable($ancestor) || (\DIRECTORY_SEPARATOR === '/' && !is_executable($ancestor))) {
                     throw new \RuntimeException('Zertifikatspfad wegen fehlender Verzeichnisrechte nicht prüfbar.');
                 }
                 $checks[] = new VerificationCheck('Datei', false, 'Zertifikat fehlt: '.$path, CertificateStatus::CERTIFICATE_MISSING);
@@ -114,6 +111,6 @@ final readonly class CertificateVerificationService
             }
         }
 
-        return new VerificationReport($local, $checks, $live);
+        return new VerificationReport($local, $checks, $live, $path, $key);
     }
 }

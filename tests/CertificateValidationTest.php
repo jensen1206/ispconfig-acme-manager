@@ -283,4 +283,47 @@ final class CertificateValidationTest extends TestCase
             self::assertSame(\in_array($scenario, ['unknown', 'key'], true) ? 0 : 1, $installs);
         }
     }
+
+    public function testVhostLegacyPairWinsOverRevokedInactiveFiles(): void
+    {
+        $d = str_replace('\\', '/', self::$directory).'/vhost-selection';
+        mkdir($d, 0700);
+        mkdir($d.'/ssl', 0700);
+        self::openssl(['ca', '-batch', '-config', self::$directory.'/openssl.cnf', '-in', self::$directory.'/leaf.csr', '-out', $d.'/ssl/example.test-le.crt']);
+        self::openssl(['ca', '-gencrl', '-config', self::$directory.'/openssl.cnf', '-out', $d.'/current.crl']);
+        copy(self::$leaf, $d.'/ssl/example.test.crt');
+        copy(self::$directory.'/leaf.key', $d.'/ssl/example.test.key');
+        copy(self::$directory.'/leaf.key', $d.'/ssl/example.test-le.key');
+        file_put_contents($d.'/example.test.vhost', "<VirtualHost *:80>\nSSLCertificateFile /ignored.crt\n</VirtualHost>\n<VirtualHost *:443>\nSSLCertificateFile \"$d/ssl/example.test-le.crt\"\nSSLCertificateKeyFile $d/ssl/example.test-le.key\n</VirtualHost>\n");
+        $config = new \App\Config\Configuration('https://panel.example.test', 'user', 'test', '/unused', 'dns_ispconfig', 0, ['ns.example.test'], localServerId: 1, vhostDirectory: $d);
+        $host = new \App\Domain\Hostname('example.test');
+        $website = new \App\ISPConfig\Website(40, 1, $host, [$host], $d, 'web40', 'client1', 1, true, false);
+        $runner = $this->createMock(\App\Process\ProcessRunnerInterface::class);
+        $runner->method('run')->willReturnCallback(static function (array $command, ?int $timeout, bool $liveOutput) use ($d): \App\Process\ProcessResult {
+            if ('s_client' === $command[1]) {
+                return new \App\Process\ProcessResult(0, file_get_contents($d.'/ssl/example.test-le.crt'), '');
+            }
+
+            return (new ProcessRunner())->run($command, $timeout, $liveOutput);
+        });
+        $reader = new CertificateReader();
+        $api = new \App\ISPConfig\ApiClient(new MockHttpClient(static fn () => throw new \RuntimeException('Unexpected API write')), $config);
+        $repository = new \App\ISPConfig\WebsiteRepository($api);
+        $validator = new CertificateValidator($runner, new MockHttpClient(static fn () => new MockResponse(file_get_contents($d.'/current.crl'))), 5, self::$root);
+        $factory = new \App\Certificate\CertificateFactory($config);
+        $verification = new \App\Service\CertificateVerificationService($repository, $factory, $reader,
+            new \App\Certificate\LiveCertificateReader($runner, $reader), $validator, $config);
+        $report = $verification->verifyWebsite($website);
+        self::assertTrue($report->successful(), $report->summary());
+        self::assertSame($d.'/ssl/example.test-le.crt', $report->localCertificatePath);
+        self::assertSame($d.'/ssl/example.test-le.key', $report->localKeyPath);
+        self::assertSame($report->certificateInfo->fingerprint, $report->liveCertificateInfo->fingerprint);
+        self::assertFalse(\App\Service\RenewalPolicy::decide($report, $report, 30, true)->renewalRequired);
+        $old = $reader->read($d.'/ssl/example.test.crt');
+        self::assertSame(CertificateStatus::REVOKED, (new VerificationReport($old, $validator->check($old, ['example.test'], 'local')))->status('local'));
+        $installer = new \App\Service\CertificateInstallationService(new \App\ISPConfig\WebsiteUpdater($api, $repository, new \App\ISPConfig\ClientIdResolver($api)),
+            $verification, $config, new \App\Service\OperationGuard($config));
+        $this->expectExceptionMessage('Installationsquelle entspricht nicht dem geprüften VHost-Dateipaar');
+        $installer->install($website, $factory->fromWebsite($website), false);
+    }
 }

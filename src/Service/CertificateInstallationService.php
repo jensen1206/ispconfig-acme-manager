@@ -17,11 +17,15 @@ final readonly class CertificateInstallationService
     {
         $this->verification->assertLocal($website);
         $source = $this->verification->verifyWebsite($website, false, $acmeSource);
+        if (!$acmeSource && ($source->localCertificatePath !== $certificate->certificatePath || $source->localKeyPath !== $certificate->keyPath)) {
+            throw new \RuntimeException('INSTALLATION_FAILED: Installationsquelle entspricht nicht dem geprüften VHost-Dateipaar.');
+        }
         if (!$source->scopeSuccessful('local') || null === $source->certificateInfo) {
             throw new \RuntimeException('INSTALLATION_FAILED: ACME-Zertifikat nicht vollständig validiert. '.$source->summary());
         }
 
         $expectedFingerprint = $source->certificateInfo->fingerprint;
+
         return $this->guard->run($website, 'install-'.$expectedFingerprint, function () use ($website, $certificate, $acmeSource, $expectedFingerprint): VerificationReport {
             $started = time();
             $baseline = $this->errorArtifacts($website);
