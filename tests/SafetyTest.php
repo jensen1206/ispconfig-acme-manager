@@ -133,4 +133,31 @@ final class SafetyTest extends TestCase
             rmdir($directory);
         }
     }
+
+    public function testDashboardConfigurationCompatibility(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'dashboard-config-');
+        try {
+            $settings = ['server' => 'https://panel.example.test:8080', 'username' => 'test', 'password' => 'test',
+                'acme' => '/custom/acme.sh', 'dns_provider' => 'dns_ispconfig', 'dns_sleep' => 120,
+                'managed_nameservers' => ['ns.example.test'], 'dashboard_certificate' => '/custom/panel.crt',
+                'dashboard_key' => '/custom/panel.key', 'dashboard_reload_command' => 'custom reload'];
+            file_put_contents($path, '<?php return '.var_export($settings, true).';');
+            $configuration = Configuration::fromFile($path);
+            self::assertSame('panel.example.test', $configuration->dashboardHostname());
+            self::assertSame(8080, $configuration->dashboardPort());
+            self::assertSame('/custom/panel.crt', $configuration->dashboardCertificatePath);
+            self::assertSame('/custom/panel.key', $configuration->dashboardKeyPath);
+            self::assertSame('custom reload', $configuration->dashboardReloadCommand);
+            self::assertSame(443, $this->config()->dashboardPort());
+            unset($settings['dashboard_certificate'], $settings['dashboard_key'], $settings['dashboard_reload_command']);
+            file_put_contents($path, '<?php return '.var_export($settings, true).';');
+            $defaults = Configuration::fromFile($path);
+            self::assertSame('/usr/local/ispconfig/interface/ssl/ispserver.crt', $defaults->dashboardCertificatePath);
+            self::assertSame('/usr/local/ispconfig/interface/ssl/ispserver.key', $defaults->dashboardKeyPath);
+            self::assertSame('systemctl reload apache2', $defaults->dashboardReloadCommand);
+        } finally {
+            unlink($path);
+        }
+    }
 }

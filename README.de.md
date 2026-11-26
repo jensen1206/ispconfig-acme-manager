@@ -1,4 +1,4 @@
-# ISPConfig ACME Manager 1.0.2
+# ISPConfig ACME Manager 1.0.3
 
 PHP-CLI für DNS-01-Zertifikate mit acme.sh und der ISPConfig Remote API. PHP 8.2+, PHP-OpenSSL, OpenSSL CLI und die bestehenden Composer-Abhängigkeiten werden benötigt.
 
@@ -73,3 +73,13 @@ composer test
 ```
 
 Tests erzeugen ausschließlich eine temporäre lokale Test-CA, Testschlüssel und CRLs. HTTP/API/TLS-Endpunkte werden simuliert; keine produktive ACME-Ausstellung oder Widerrufe. Die Tests erfordern das OpenSSL-CLI im PATH. Vor Produktiveinsatz zusätzlich einen isolierten Debian-12-/ISPConfig-Abnahmetest durchführen.
+
+## Dashboard-Zertifikat (ab 1.0.3)
+
+Die zusätzliche Serverfunktion `dashboard:renew` wurde aus der bisherigen Installation übernommen. Die Optionen `--force`/`-f` und `--yes`/`-y` bleiben erhalten. Hostname und TLS-Port stammen aus `server` (zum Beispiel HTTPS-Port 8080); ohne expliziten Port wird 443 verwendet.
+
+Die Schlüssel `dashboard_certificate`, `dashboard_key` und `dashboard_reload_command` werden wieder ausgewertet. Standardziele sind `/usr/local/ispconfig/interface/ssl/ispserver.crt` und `ispserver.key`, Standard-Reload ist `systemctl reload apache2`. Der vertrauenswürdige, administrativ konfigurierte Reload-Befehl wird als einzelnes Argument an acme.sh übergeben. Dieser Panel-Befehl installiert direkt per acme.sh und verwendet keine Website-API. Er muss auf dem tatsächlichen Panel-Server ausgeführt werden; `server` darf dabei nicht auf ein entferntes Panel zeigen.
+
+Vor dem Installieren werden ACME-Zertifikat, SAN, Kette, CRL und Schlüssel geprüft. Ein gültiger, ausreichend lang laufender ACME-Bestand wird wiederverwendet. Unbekannter Widerrufsstatus führt ohne explizites `--force` zu keiner Neuausstellung. Nach Installation/Reload werden Zieldateien und das öffentliche Zertifikat mit konfigurierbarem Timeout geprüft. Eine erfolgreiche acme.sh-Rückgabe allein ist kein Installationserfolg. Es gelten dieselben Sperren und Cooldowns wie für Website-Aktionen, mit einer getrennten Dashboard-Kennung. `--force` umgeht diese Sperren nicht.
+
+`dashboard:renew` verändert Panel-Zertifikatsdateien und kann den konfigurierten Dienst neu laden. Es ist kein Diagnosebefehl und wird nicht automatisch von `watch` ausgeführt. Bei einem Fehler erfolgt keine automatische Wiederholung oder Rücksetzung. Bereits bestehende acme.sh-Cronjobs und gespeicherte Reload-Hooks bleiben bestehen.

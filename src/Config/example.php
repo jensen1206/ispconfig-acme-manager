@@ -43,6 +43,10 @@ return [
     'vhost_directory' => '/etc/apache2/sites-available',
     // Enable only for sites whose public TLS terminates on this webserver.
     'automatic_repair' => false,
+    // dashboard:renew only: run on the actual panel server, not a remote web node.
+    'dashboard_certificate' => '/usr/local/ispconfig/interface/ssl/ispserver.crt',
+    'dashboard_key' => '/usr/local/ispconfig/interface/ssl/ispserver.key',
+    'dashboard_reload_command' => 'systemctl reload apache2',
     // Optional trust store, otherwise use the OpenSSL system trust store:
     // 'ca_file' => '/etc/ssl/certs/ca-certificates.crt',
 

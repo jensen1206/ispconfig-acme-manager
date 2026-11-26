@@ -92,7 +92,7 @@ final class CertificateValidationTest extends TestCase
     {
         $base64 = preg_replace('/-----[^\n]+-----|\s/', '', self::$revokedCrl);
         $der = base64_decode($base64, true);
-        $der[strlen($der) - 1] = chr(ord($der[strlen($der) - 1]) ^ 1);
+        $der[\strlen($der) - 1] = \chr(\ord($der[\strlen($der) - 1]) ^ 1);
         $corrupt = "-----BEGIN X509 CRL-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END X509 CRL-----\n";
         self::assertSame(CertificateStatus::REVOCATION_UNKNOWN, $this->report($corrupt)->status('local'));
     }
@@ -105,6 +105,7 @@ final class CertificateValidationTest extends TestCase
         self::assertSame(CertificateStatus::HOSTNAME_MISMATCH, $report->status('public'));
         self::assertFalse($report->successful());
     }
+
     public function testPrivateKeyAndSerial(): void
     {
         $reader = new CertificateReader();
@@ -208,5 +209,78 @@ final class CertificateValidationTest extends TestCase
         self::assertTrue($installer->install($website, $factory->fromWebsite($website))->successful());
         self::assertSame(1, $updates);
         self::assertSame(2, $probes);
+    }
+
+    public static function dashboardCases(): array
+    {
+        return ['reuse and delayed TLS' => ['success'], 'unknown CRL' => ['unknown'], 'wrong key' => ['key'], 'TLS timeout' => ['timeout'], 'reload failure' => ['reload']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('dashboardCases')]
+    public function testDashboardRenewal(string $scenario): void
+    {
+        $d = self::$directory.'/dashboard-'.bin2hex(random_bytes(4));
+        mkdir($d, 0700);
+        mkdir($d.'/example.test_ecc', 0700);
+        copy(self::$leaf, $d.'/example.test_ecc/fullchain.cer');
+        copy(self::$directory.('key' === $scenario ? '/root.key' : '/leaf.key'), $d.'/example.test_ecc/example.test.key');
+        $config = new \App\Config\Configuration('https://example.test:8080', 'user', 'test-secret', '/unused-acme', 'dns_ispconfig', 0, ['ns.example.test'],
+            localServerId: 1, installationTimeout: 5, pollInterval: 1, stateDirectory: $d.'/state', acmeHome: '/custom-acme', acmeConfigHome: $d, caFile: self::$root,
+            dashboardCertificatePath: $d.'/panel.crt', dashboardKeyPath: $d.'/panel.key', dashboardReloadCommand: 'test reload command');
+        $runner = $this->createMock(\App\Process\ProcessRunnerInterface::class);
+        $installs = 0;
+        $probes = 0;
+        $runner->method('run')->willReturnCallback(static function (array $command, ?int $timeout, bool $liveOutput) use ($d, $scenario, &$installs, &$probes): \App\Process\ProcessResult {
+            self::assertNotContains('--issue', $command, 'Valid/unknown/unusable source must not cause unnecessary issuance.');
+            if (\in_array('--install-cert', $command, true)) {
+                ++$installs;
+                self::assertFalse($liveOutput);
+                self::assertSame($d, $command[array_search('--config-home', $command, true) + 1]);
+                self::assertSame('/custom-acme', $command[array_search('--home', $command, true) + 1]);
+                self::assertSame('test reload command', $command[array_search('--reloadcmd', $command, true) + 1]);
+                if ('reload' === $scenario) {
+                    throw new \RuntimeException('test-secret PRIVATE KEY');
+                }
+                copy(self::$leaf, $d.'/panel.crt');
+                copy(self::$directory.'/leaf.key', $d.'/panel.key');
+
+                return new \App\Process\ProcessResult(0, '', '');
+            }
+            if ('s_client' === $command[1]) {
+                ++$probes;
+                self::assertContains('example.test:8080', $command);
+
+                return new \App\Process\ProcessResult(0, 'timeout' === $scenario || 1 === $probes ? '' : file_get_contents(self::$leaf), '');
+            }
+
+            return (new ProcessRunner())->run($command, $timeout, $liveOutput);
+        });
+        $reader = new CertificateReader();
+        $manager = new \App\Acme\AcmeManager($config, $runner);
+        $service = new \App\Service\DashboardCertificateService($config, $manager, $reader,
+            new \App\Certificate\LiveCertificateReader($runner, $reader),
+            new CertificateValidator($runner, new MockHttpClient(static fn () => new MockResponse('unknown' === $scenario ? 'invalid CRL' : self::$goodCrl)), 5, self::$root),
+            new \App\Dns\NameserverChecker($config), new \App\Service\OperationGuard($config));
+        $command = new \App\Command\RenewDashboardCertificateCommand($service, $config);
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($command);
+        self::assertTrue($command->getDefinition()->hasOption('force'));
+        self::assertTrue($command->getDefinition()->hasShortcut('f'));
+        self::assertTrue($command->getDefinition()->hasShortcut('y'));
+        $tester->setInputs(['no']);
+        self::assertSame(0, $tester->execute([]));
+        self::assertSame(0, $installs);
+        self::assertDirectoryDoesNotExist($d.'/state');
+        $exit = $tester->execute(['--yes' => true]);
+        self::assertStringNotContainsString('test-secret', $tester->getDisplay());
+        self::assertStringNotContainsString('PRIVATE KEY', $tester->getDisplay());
+        if ('success' === $scenario) {
+            self::assertSame(0, $exit, $tester->getDisplay());
+            self::assertSame(1, $installs);
+            self::assertSame(2, $probes);
+            self::assertStringContainsString('Vorhandenes Dashboard-Zertifikat', $tester->getDisplay());
+        } else {
+            self::assertSame(1, $exit);
+            self::assertSame(\in_array($scenario, ['unknown', 'key'], true) ? 0 : 1, $installs);
+        }
     }
 }

@@ -43,13 +43,17 @@ final readonly class AcmeManager
         throw new \RuntimeException(\sprintf("Die Zertifikatsausstellung ist fehlgeschlagen.\n%s", 'Details aus Sicherheitsgründen unterdrückt; ACME-Fehler/Rate-Limit prüfen.'));
     }
 
-    public function install(Certificate $certificate): ProcessResult
+    public function install(Certificate $certificate, string $reloadCommand = 'systemctl reload apache2'): ProcessResult
     {
-        $result = $this->processRunner->run(
-            command: $this->installCommand($certificate),
-            timeout: 120,
-            liveOutput: false,
-        );
+        try {
+            $result = $this->processRunner->run(
+                command: $this->installCommand($certificate, $reloadCommand),
+                timeout: 120,
+                liveOutput: false,
+            );
+        } catch (\Throwable) {
+            throw new \RuntimeException('INSTALLATION_FAILED: ACME-Installation oder Reload fehlgeschlagen; Ausgabe unterdrückt.');
+        }
 
         if (!$result->successful()) {
             throw new \RuntimeException(\sprintf("Die Zertifikatsinstallation ist fehlgeschlagen.\n%s", 'Details aus Sicherheitsgründen unterdrückt; ACME-Fehler/Rate-Limit prüfen.'));
@@ -95,10 +99,12 @@ final readonly class AcmeManager
     /**
      * @return list<string>
      */
-    public function installCommand(Certificate $certificate): array
+    public function installCommand(Certificate $certificate, string $reloadCommand = 'systemctl reload apache2'): array
     {
         $command = [
             $this->configuration->acmeExecutable,
+            '--home', $this->configuration->acmeHome,
+            '--config-home', $this->configuration->acmeConfigHome,
             '--install-cert',
             '-d',
             $certificate->domain(),
@@ -113,7 +119,7 @@ final readonly class AcmeManager
         $command[] = '--fullchain-file';
         $command[] = $certificate->certificatePath;
         $command[] = '--reloadcmd';
-        $command[] = 'systemctl reload apache2';
+        $command[] = $reloadCommand;
 
         return $command;
     }
