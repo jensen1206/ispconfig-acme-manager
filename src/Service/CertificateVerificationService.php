@@ -4,7 +4,10 @@ namespace App\Service;
 
 use App\Certificate\CertificateFactory;
 use App\Certificate\CertificateReader;
+use App\Certificate\CertificateStatus;
+use App\Certificate\CertificateValidator;
 use App\Certificate\LiveCertificateReader;
+use App\Config\Configuration;
 use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
@@ -16,192 +19,101 @@ final readonly class CertificateVerificationService
         private CertificateFactory $certificateFactory,
         private CertificateReader $certificateReader,
         private LiveCertificateReader $liveCertificateReader,
+        private CertificateValidator $validator,
+        private Configuration $configuration,
     ) {
     }
 
-    public function verify(
-        Hostname $hostname,
-        bool $includeLiveCertificate = true,
-    ): VerificationReport {
-        return $this->verifyWebsite(
-            website: $this->websiteRepository->findByDomain($hostname),
-            includeLiveCertificate: $includeLiveCertificate,
-        );
+    public function assertLocal(Website $website): void
+    {
+        if ($this->configuration->localServerId !== $website->serverId) {
+            throw new \RuntimeException('INSTALLATION_FAILED: local_server_id muss dem zuständigen Webserver entsprechen; kein lokaler Zugriff.');
+        }
     }
 
-    public function verifyWebsite(
-        Website $website,
-        bool $includeLiveCertificate = true,
-    ): VerificationReport {
+    public function verify(Hostname $hostname, bool $includeLiveCertificate = true): VerificationReport
+    {
+        return $this->verifyWebsite($this->websiteRepository->findByDomain($hostname), $includeLiveCertificate);
+    }
+
+    public function verifyWebsite(Website $website, bool $includeLiveCertificate = true, bool $acmeSource = false, int $days = 30, ?float $deadline = null): VerificationReport
+    {
         $certificate = $this->certificateFactory->fromWebsite($website);
-
-        $certificatePath = $certificate->certificatePath;
-        $keyPath = $certificate->keyPath;
-
-        if (!is_file($certificatePath)) {
-            $legacyCertificatePath = \sprintf(
-                '%s/ssl/%s-le.crt',
-                rtrim($website->documentRoot, '/'),
-                $website->domain(),
-            );
-
-            if (is_file($legacyCertificatePath)) {
-                $certificatePath = $legacyCertificatePath;
-            }
-        }
-
-        if (!is_file($keyPath)) {
-            $legacyKeyPath = \sprintf(
-                '%s/ssl/%s-le.key',
-                rtrim($website->documentRoot, '/'),
-                $website->domain(),
-            );
-
-            if (is_file($legacyKeyPath)) {
-                $keyPath = $legacyKeyPath;
-            }
-        }
-
-        $localInfo = $this->certificateReader->read($certificatePath);
-
         $checks = [];
-
-        $checks[] = new VerificationCheck(
-            name: 'Zertifikatsdatei',
-            successful: is_file($certificatePath),
-            message: $certificatePath,
-        );
-
-        $checks[] = new VerificationCheck(
-            name: 'Privater Schlüssel',
-            successful: is_file($keyPath),
-            message: $keyPath,
-        );
-
-        $checks[] = new VerificationCheck(
-            name: 'Gültigkeitszeitraum',
-            successful: $localInfo->isCurrentlyValid(),
-            message: \sprintf(
-                '%s bis %s (%d Tage verbleibend)',
-                $localInfo->validFrom->format('d.m.Y H:i:s'),
-                $localInfo->validUntil->format('d.m.Y H:i:s'),
-                $localInfo->daysUntilExpiration(),
-            ),
-        );
-
-        $missingHostnames = array_values(array_diff(
-            $certificate->hostnameValues(),
-            $localInfo->subjectAlternativeNames,
-        ));
-
-        $checks[] = new VerificationCheck(
-            name: 'Zertifikatsnamen',
-            successful: [] === $missingHostnames,
-            message: [] === $missingHostnames
-                ? implode(', ', $localInfo->subjectAlternativeNames)
-                : \sprintf(
-                    'Fehlend: %s',
-                    implode(', ', $missingHostnames),
-                ),
-        );
-
-        $keyMatches = $this->certificateReader->keyMatchesCertificate(
-            certificatePath: $certificatePath,
-            keyPath: $keyPath,
-        );
-
-        $checks[] = new VerificationCheck(
-            name: 'Schlüsselpaar',
-            successful: $keyMatches,
-            message: $keyMatches
-                ? 'Privater Schlüssel passt zum Zertifikat.'
-                : 'Privater Schlüssel passt nicht zum Zertifikat.',
-        );
-
-        $liveInfo = null;
-
+        $local = null;
+        $live = null;
+        try {
+            $this->assertLocal($website);
+            $path = $acmeSource ? $certificate->acmeFullChainPath() : $certificate->certificatePath;
+            $key = $acmeSource ? $certificate->acmeKeyPath() : $certificate->keyPath;
+            // Legacy files are selected as a pair, never mixed with current files.
+            if (!$acmeSource && !is_file($path) && !is_file($key)) {
+                $legacy = $website->sslDirectory().'/'.$website->domain().'-le';
+                if (is_file($legacy.'.crt') && is_file($legacy.'.key')) {
+                    $path = $legacy.'.crt';
+                    $key = $legacy.'.key';
+                }
+            }
+            if (!is_file($path)) {
+                // Distinguish absent files from an inaccessible ancestor. Never issue
+                // a replacement merely because permissions prevent inspection.
+                $ancestor = dirname($path);
+                while (!is_dir($ancestor) && dirname($ancestor) !== $ancestor) {
+                    $ancestor = dirname($ancestor);
+                }
+                if (!is_readable($ancestor) || (DIRECTORY_SEPARATOR === '/' && !is_executable($ancestor))) {
+                    throw new \RuntimeException('Zertifikatspfad wegen fehlender Verzeichnisrechte nicht prüfbar.');
+                }
+                $checks[] = new VerificationCheck('Datei', false, 'Zertifikat fehlt: '.$path, CertificateStatus::CERTIFICATE_MISSING);
+            } else {
+                $local = $this->certificateReader->read($path);
+                $checks[] = new VerificationCheck('Datei', true, $path);
+                $checks = [...$checks, ...$this->validator->check($local, $certificate->hostnameValues(), 'local', $days, $deadline)];
+                $matches = $this->certificateReader->keyMatchesCertificate($path, $key);
+                $checks[] = new VerificationCheck('Schlüsselpaar', $matches, $matches ? 'Schlüssel passt.' : 'Schlüssel passt nicht.',
+                    $matches ? CertificateStatus::VALID : CertificateStatus::CERTIFICATE_MISMATCH);
+            }
+        } catch (\Throwable $error) {
+            $checks[] = new VerificationCheck('Lokale Prüfung', false, $error->getMessage(), CertificateStatus::CERTIFICATE_INVALID);
+        }
         if ($includeLiveCertificate) {
-            $liveInfo = $this->liveCertificateReader->read(
-                hostname: $website->domain(),
-            );
-
-            $checks[] = new VerificationCheck(
-                name: 'Live-Zertifikat erreichbar',
-                successful: $liveInfo->isCurrentlyValid(),
-                message: \sprintf(
-                    '%s bis %s',
-                    $liveInfo->validFrom->format('d.m.Y H:i:s'),
-                    $liveInfo->validUntil->format('d.m.Y H:i:s'),
-                ),
-            );
-
-            $fingerprintsMatch = hash_equals(
-                $localInfo->fingerprint,
-                $liveInfo->fingerprint,
-            );
-
-            $checks[] = new VerificationCheck(
-                name: 'Live-Fingerprint',
-                successful: $fingerprintsMatch,
-                message: $fingerprintsMatch
-                    ? 'Lokales und ausgeliefertes Zertifikat sind identisch.'
-                    : \sprintf(
-                        'Abweichung: lokal %s, live %s',
-                        $localInfo->fingerprint,
-                        $liveInfo->fingerprint,
-                    ),
-            );
-
-            $liveNamesMatch = $this->sameStringSet(
-                $localInfo->subjectAlternativeNames,
-                $liveInfo->subjectAlternativeNames,
-            );
-
-            $checks[] = new VerificationCheck(
-                name: 'Live-Zertifikatsnamen',
-                successful: $liveNamesMatch,
-                message: [] !== $liveInfo->subjectAlternativeNames
-                    ? implode(', ', $liveInfo->subjectAlternativeNames)
-                    : 'Keine Subject Alternative Names vorhanden.',
-            );
-
-            $issuerMatches = $localInfo->issuer === $liveInfo->issuer;
-
-            $checks[] = new VerificationCheck(
-                name: 'Live-Aussteller',
-                successful: $issuerMatches,
-                message: $liveInfo->issuer,
-            );
-
-            $expirationMatches =
-                $localInfo->validUntil->getTimestamp()
-                === $liveInfo->validUntil->getTimestamp();
-
-            $checks[] = new VerificationCheck(
-                name: 'Live-Ablaufdatum',
-                successful: $expirationMatches,
-                message: $liveInfo->validUntil->format('d.m.Y H:i:s'),
-            );
+            foreach ($certificate->hostnameValues() as $hostname) {
+                if (str_contains($hostname, '*')) {
+                    continue;
+                }
+                try {
+                    $remaining = null === $deadline ? $this->configuration->networkTimeout : (int) floor($deadline - microtime(true));
+                    if ($remaining < 1) {
+                        throw new \RuntimeException('CONNECTION_ERROR: Prüfzeitlimit erreicht.');
+                    }
+                    $current = $this->liveCertificateReader->read($hostname, timeout: min($remaining, $this->configuration->networkTimeout));
+                    $live ??= $current;
+                    $checks = [...$checks, ...$this->validator->check($current, [$hostname], 'public', $days, $deadline)];
+                    if (null !== $local) {
+                        $matches = hash_equals($local->fingerprint, $current->fingerprint) && $local->serialNumber === $current->serialNumber;
+                        $checks[] = new VerificationCheck('Fingerprint/Seriennummer', $matches,
+                            $hostname.': '.$current->fingerprint.' / '.$current->serialNumber,
+                            $matches ? CertificateStatus::VALID : CertificateStatus::CERTIFICATE_MISMATCH, 'public');
+                    }
+                } catch (\Throwable $error) {
+                    $status = str_starts_with($error->getMessage(), 'HTTPS_UNAVAILABLE') ? CertificateStatus::HTTPS_UNAVAILABLE : CertificateStatus::CONNECTION_ERROR;
+                    $checks[] = new VerificationCheck('TLS', false, $hostname.': '.$error->getMessage(), $status, 'public');
+                }
+            }
+            if (!$acmeSource && $this->configuration->localServerId === $website->serverId) {
+                $vhost = $this->configuration->vhostDirectory.'/'.$website->domain().'.vhost';
+                if (is_readable($vhost) && is_file($vhost)) {
+                    $content = file_get_contents($vhost);
+                    if (\is_string($content)) {
+                        $https = 1 === preg_match('/<VirtualHost\s+[^>]*:443(?:\s|>)/i', $content);
+                        $checks[] = new VerificationCheck('HTTPS-VHost', $https,
+                            $https ? 'HTTPS-VHost-Konfiguration vorhanden (kein Nachweis ihrer Aktivierung).' : 'Kein Port-443-VHost in der generierten Konfiguration.',
+                            $https ? CertificateStatus::VALID : CertificateStatus::HTTPS_UNAVAILABLE, 'installation');
+                    }
+                }
+            }
         }
 
-        return new VerificationReport(
-            certificateInfo: $localInfo,
-            checks: $checks,
-            liveCertificateInfo: $liveInfo,
-        );
-    }
-
-    /**
-     * @param list<string> $left
-     * @param list<string> $right
-     */
-    private function sameStringSet(
-        array $left,
-        array $right,
-    ): bool {
-        sort($left);
-        sort($right);
-
-        return $left === $right;
+        return new VerificationReport($local, $checks, $live);
     }
 }

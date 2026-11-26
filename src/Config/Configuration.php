@@ -15,7 +15,21 @@ final readonly class Configuration
         public string $dnsProvider,
         public int $dnsSleep,
         public array $managedNameservers,
+        public int $localServerId = 0,
+        public int $installationTimeout = 180,
+        public int $pollInterval = 5,
+        public int $networkTimeout = 15,
+        public int $retryCooldown = 86400,
+        public string $stateDirectory = '/var/lib/ispconfig-acme-manager',
+        public string $acmeHome = '/root/.acme.sh',
+        public string $acmeConfigHome = '/root/.acme.sh',
+        public string $caFile = '',
+        public string $vhostDirectory = '/etc/apache2/sites-available',
+        public bool $automaticRepair = false,
     ) {
+        if ($localServerId < 0 || min($installationTimeout, $pollInterval, $networkTimeout, $retryCooldown) < 1) {
+            throw new \InvalidArgumentException('Server-ID oder Zeitlimits ungültig.');
+        }
     }
 
     public static function fromFile(string $path): self
@@ -49,6 +63,17 @@ final readonly class Configuration
             acmeExecutable: self::requiredString($normalizedConfig, 'acme'),
             dnsProvider: self::requiredString($normalizedConfig, 'dns_provider'),
             dnsSleep: self::requiredInt($normalizedConfig, 'dns_sleep'),
+            localServerId: self::requiredInt($normalizedConfig + ['local_server_id' => 0], 'local_server_id'),
+            installationTimeout: self::requiredInt($normalizedConfig + ['installation_timeout' => 180], 'installation_timeout'),
+            pollInterval: self::requiredInt($normalizedConfig + ['poll_interval' => 5], 'poll_interval'),
+            networkTimeout: self::requiredInt($normalizedConfig + ['network_timeout' => 15], 'network_timeout'),
+            retryCooldown: self::requiredInt($normalizedConfig + ['retry_cooldown' => 86400], 'retry_cooldown'),
+            stateDirectory: self::requiredString($normalizedConfig + ['state_directory' => '/var/lib/ispconfig-acme-manager'], 'state_directory'),
+            acmeHome: self::requiredString($normalizedConfig + ['acme_home' => '/root/.acme.sh'], 'acme_home'),
+            acmeConfigHome: self::requiredString($normalizedConfig + ['acme_config_home' => '/root/.acme.sh'], 'acme_config_home'),
+            caFile: \array_key_exists('ca_file', $normalizedConfig) ? self::requiredString($normalizedConfig, 'ca_file') : '',
+            vhostDirectory: self::requiredString($normalizedConfig + ['vhost_directory' => '/etc/apache2/sites-available'], 'vhost_directory'),
+            automaticRepair: ($normalizedConfig['automatic_repair'] ?? false) === true,
             managedNameservers: self::requiredStringList(
                 $normalizedConfig,
                 'managed_nameservers',

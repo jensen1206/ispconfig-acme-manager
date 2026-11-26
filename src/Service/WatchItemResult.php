@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
 final readonly class WatchItemResult
@@ -12,6 +10,7 @@ final readonly class WatchItemResult
         public string $message,
         public bool $changed = false,
         public bool $failed = false,
+        public ?VerificationReport $verificationReport = null,
     ) {
     }
 }

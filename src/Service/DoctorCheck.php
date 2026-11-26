@@ -8,6 +8,7 @@ final readonly class DoctorCheck
         public string $name,
         public bool $successful,
         public string $message,
+        public bool $warning = false,
     ) {
     }
 }

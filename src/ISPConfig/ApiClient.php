@@ -5,7 +5,6 @@ namespace App\ISPConfig;
 use App\Config\Configuration;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Throwable;
 
 final class ApiClient
 {
@@ -88,7 +87,7 @@ final class ApiClient
     {
         try {
             $this->logout();
-        } catch (Throwable) {
+        } catch (\Throwable) {
             /*
              * Ein Logout-Fehler darf den ursprünglichen Exit-Code und die
              * eigentliche Fehlermeldung des Commands nicht überschreiben.
@@ -128,7 +127,7 @@ final class ApiClient
         }
 
         if ($statusCode < 200 || $statusCode >= 300) {
-            throw new ApiException(\sprintf('ISPConfig-API-Aufruf "%s" lieferte HTTP %d: %s', $method, $statusCode, $content));
+            throw new ApiException(\sprintf('ISPConfig-API-Aufruf "%s" lieferte HTTP %d: %s', $method, $statusCode, 'Antwortinhalt unterdrückt'));
         }
 
         try {
@@ -138,7 +137,7 @@ final class ApiClient
                 flags: \JSON_THROW_ON_ERROR,
             );
         } catch (\JsonException $exception) {
-            throw new ApiException(\sprintf('Ungültige JSON-Antwort bei "%s": %s', $method, $content), previous: $exception);
+            throw new ApiException(\sprintf('Ungültige JSON-Antwort bei "%s": %s', $method, 'Antwortinhalt unterdrückt'), previous: $exception);
         }
 
         if (!\is_array($decoded)) {
@@ -149,7 +148,7 @@ final class ApiClient
         $message = $decoded['message'] ?? null;
 
         if (!\is_string($code) || 'ok' !== $code) {
-            throw new ApiException(\sprintf('ISPConfig-API-Fehler bei "%s": %s', $method, \is_string($message) ? $message : 'Unbekannter Fehler'));
+            throw new ApiException(\sprintf('ISPConfig-API-Fehler bei "%s": %s', $method, 'Remote-Aufruf abgelehnt; Rechte und Parameter prüfen'));
         }
 
         return $decoded['response'] ?? null;

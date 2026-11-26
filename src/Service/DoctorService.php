@@ -4,14 +4,14 @@ namespace App\Service;
 
 use App\Config\Configuration;
 use App\ISPConfig\ApiClient;
-use App\Process\ProcessRunner;
+use App\Process\ProcessRunnerInterface;
 
 final readonly class DoctorService
 {
     public function __construct(
         private Configuration $configuration,
         private ApiClient $apiClient,
-        private ProcessRunner $processRunner,
+        private ProcessRunnerInterface $processRunner,
     ) {
     }
 
@@ -31,6 +31,9 @@ final readonly class DoctorService
             $this->checkApacheConfiguration(),
             $this->checkSystemctl(),
             $this->checkOpenSsl(),
+            $this->checkCrlSupport(),
+            new DoctorCheck('Serverzuordnung', $this->configuration->localServerId > 0, 'local_server_id='.$this->configuration->localServerId),
+            new DoctorCheck('ISPConfig-Cleanup', false, 'Nicht über eine verifizierte Leseschnittstelle verfügbar. Je Webserver prüfen: le_auto_cleanup=n, le_revoke_before_delete=n; le_delete_on_site_remove separat bewerten. Keine Einstellungen geändert.', true),
         ];
     }
 
@@ -145,10 +148,7 @@ final readonly class DoctorService
             return new DoctorCheck(
                 name: 'ISPConfig-API',
                 successful: true,
-                message: \sprintf(
-                    'Login erfolgreich, Session %s…',
-                    substr($session->id(), 0, 8),
-                ),
+                message: 'Login erfolgreich.',
             );
         } catch (\Throwable $exception) {
             return new DoctorCheck(
@@ -157,7 +157,7 @@ final readonly class DoctorService
                 message: $exception->getMessage(),
             );
         } finally {
-            $this->apiClient->logout();
+            $this->apiClient->logoutSilently();
         }
     }
 
@@ -165,7 +165,7 @@ final readonly class DoctorService
     {
         $provider = $this->configuration->dnsProvider;
         $path = \sprintf(
-            '/root/.acme.sh/dnsapi/%s.sh',
+            rtrim($this->configuration->acmeHome, '/').'/dnsapi/%s.sh',
             $provider,
         );
 
@@ -246,5 +246,17 @@ final readonly class DoctorService
             successful: $result->successful(),
             message: trim($result->combinedOutput()),
         );
+    }
+
+    private function checkCrlSupport(): DoctorCheck
+    {
+        try {
+            $result = $this->processRunner->run(['openssl', 'verify', '-help'], 15, false);
+            $supported = $result->contains('-crl_check') && $result->contains('-CRLfile') && \extension_loaded('openssl');
+
+            return new DoctorCheck('OpenSSL CRL', $supported, $supported ? 'CRL-Prüfung verfügbar.' : 'CRL-Unterstützung fehlt.');
+        } catch (\Throwable) {
+            return new DoctorCheck('OpenSSL CRL', false, 'OpenSSL nicht ausführbar.');
+        }
     }
 }

@@ -14,6 +14,10 @@ final readonly class CertificateInfo
         public \DateTimeImmutable $validUntil,
         public array $subjectAlternativeNames,
         public string $fingerprint,
+        public string $serialNumber = '',
+        public string $pem = '',
+        public string $chainPem = '',
+        public string $crlDistributionPoints = '',
     ) {
     }
 

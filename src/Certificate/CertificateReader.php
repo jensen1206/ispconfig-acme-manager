@@ -7,17 +7,28 @@ final readonly class CertificateReader
     public function read(string $path): CertificateInfo
     {
         $content = $this->readFile($path);
+        if (str_ends_with($path, '.crt')) {
+            $bundlePath = substr($path, 0, -4).'.bundle';
+            if (is_file($bundlePath) && is_readable($bundlePath)) {
+                $content .= "\n".$this->readFile($bundlePath);
+            }
+        }
 
+        return $this->readPem($content);
+    }
+
+    public function readPem(string $content): CertificateInfo
+    {
         $certificate = openssl_x509_read($content);
 
         if (false === $certificate) {
-            throw new \RuntimeException(\sprintf('Das Zertifikat konnte nicht gelesen werden: %s', $path));
+            throw new \RuntimeException('Das Zertifikat konnte nicht gelesen werden.');
         }
 
         $data = openssl_x509_parse($certificate, true);
 
         if (!\is_array($data)) {
-            throw new \RuntimeException(\sprintf('Das Zertifikat konnte nicht analysiert werden: %s', $path));
+            throw new \RuntimeException('Das Zertifikat konnte nicht analysiert werden.');
         }
 
         $validFromTimestamp = $data['validFrom_time_t'] ?? null;
@@ -43,6 +54,11 @@ final readonly class CertificateReader
             throw new \RuntimeException('Der SHA-256-Fingerprint konnte nicht ermittelt werden.');
         }
 
+        preg_match_all('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $content, $blocks);
+        $extensions = $data['extensions'] ?? [];
+        $crl = \is_array($extensions) ? ($extensions['crlDistributionPoints'] ?? '') : '';
+        $serial = $data['serialNumberHex'] ?? '';
+
         return new CertificateInfo(
             commonName: $commonName,
             issuer: $issuer,
@@ -52,6 +68,10 @@ final readonly class CertificateReader
                 ->setTimestamp($validUntilTimestamp),
             subjectAlternativeNames: $subjectAlternativeNames,
             fingerprint: strtoupper($fingerprint),
+            serialNumber: \is_string($serial) ? (ltrim(strtoupper($serial), '0') ?: '0') : '',
+            pem: ($blocks[0][0] ?? '')."\n",
+            chainPem: implode("\n", \array_slice($blocks[0], 1)),
+            crlDistributionPoints: \is_string($crl) ? $crl : '',
         );
     }
 

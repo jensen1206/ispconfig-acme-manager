@@ -12,6 +12,7 @@ final readonly class CertificateIssueResult
         public ProcessResult $installResult,
         public mixed $updateResult,
         public VerificationReport $verificationReport,
+        public bool $issued = true,
     ) {
     }
 }

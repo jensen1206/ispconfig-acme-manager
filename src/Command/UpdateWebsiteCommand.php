@@ -21,6 +21,7 @@ final class UpdateWebsiteCommand extends Command
         private readonly CertificateFactory $certificateFactory,
         private readonly WebsiteUpdater $websiteUpdater,
         private readonly ApiClient $apiClient,
+        private readonly \App\Service\CertificateInstallationService $installation,
     ) {
         parent::__construct('update');
     }
@@ -118,18 +119,12 @@ final class UpdateWebsiteCommand extends Command
                 return Command::SUCCESS;
             }
 
-            $result = $this->websiteUpdater->saveCertificate(
+            $result = $this->installation->install(
                 website: $website,
                 certificate: $certificate,
             );
 
-            $resultDescription = match (true) {
-                \is_bool($result) => $result ? 'true' : 'false',
-                \is_int($result) => (string) $result,
-                \is_string($result) => $result,
-                \is_array($result) => 'Array-Antwort',
-                default => get_debug_type($result),
-            };
+            $resultDescription = $result->summary();
 
             $io->success([
                 'ISPConfig hat das Website-Update angenommen.',

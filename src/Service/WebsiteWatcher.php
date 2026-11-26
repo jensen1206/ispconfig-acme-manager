@@ -1,13 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
 use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
-use Throwable;
 
 final readonly class WebsiteWatcher
 {
@@ -72,7 +69,7 @@ final readonly class WebsiteWatcher
                 renewBeforeDays: $renewBeforeDays,
             );
 
-            if ($check->status === 'ssl-disabled') {
+            if ('ssl-disabled' === $check->status) {
                 return new WatchItemResult(
                     domain: $website->domain(),
                     status: 'ssl-disabled',
@@ -80,7 +77,7 @@ final readonly class WebsiteWatcher
                 );
             }
 
-            if ($check->status === 'external-dns') {
+            if ('external-dns' === $check->status) {
                 return new WatchItemResult(
                     domain: $website->domain(),
                     status: 'external-dns',
@@ -91,8 +88,10 @@ final readonly class WebsiteWatcher
             if (!$check->renewalRequired) {
                 return new WatchItemResult(
                     domain: $website->domain(),
-                    status: 'valid',
+                    status: false === $check->verificationReport?->successful() ? 'error' : 'valid',
                     message: $check->message,
+                    failed: false === $check->verificationReport?->successful(),
+                    verificationReport: $check->verificationReport,
                 );
             }
 
@@ -102,19 +101,20 @@ final readonly class WebsiteWatcher
 
             if ($dryRun) {
                 return new WatchItemResult(
+                    verificationReport: $check->verificationReport,
                     domain: $website->domain(),
-                    status: $missingCertificate
+                    status: 'reinstall' === $check->status ? 'reinstalled' : ($missingCertificate
                         ? 'issued'
-                        : 'renewed',
-                    message: $missingCertificate
-                        ? sprintf(
+                        : 'renewed'),
+                    message: 'reinstall' === $check->status ? 'Vorhandenes Zertifikat würde installiert. '.$check->message : ($missingCertificate
+                        ? \sprintf(
                             'Für "%s" würde ein neues Zertifikat ausgestellt.',
                             $website->domain(),
                         )
-                        : sprintf(
+                        : \sprintf(
                             'Das Zertifikat würde erneuert: %s',
                             $check->message,
-                        ),
+                        )),
                 );
             }
 
@@ -132,7 +132,7 @@ final readonly class WebsiteWatcher
             }
 
             if (
-                $result->verificationReport !== null
+                null !== $result->verificationReport
                 && !$result->verificationReport->successful()
             ) {
                 return new WatchItemResult(
@@ -141,25 +141,33 @@ final readonly class WebsiteWatcher
                     message: 'Das Zertifikat wurde verarbeitet, aber die abschließende lokale Prüfung ist fehlgeschlagen.',
                     changed: true,
                     failed: true,
+                    verificationReport: $result->verificationReport,
                 );
             }
 
             return new WatchItemResult(
                 domain: $website->domain(),
-                status: $missingCertificate
+                status: $result->reinstalled ? 'reinstalled' : ($missingCertificate
                     ? 'issued'
-                    : 'renewed',
-                message: $missingCertificate
+                    : 'renewed'),
+                message: $result->reinstalled ? $result->message : ($missingCertificate
                     ? 'Ein neues Zertifikat wurde erfolgreich ausgestellt, installiert und geprüft.'
-                    : 'Das Zertifikat wurde erfolgreich erneuert, installiert und geprüft.',
+                    : 'Das Zertifikat wurde erfolgreich erneuert, installiert und geprüft.'),
                 changed: true,
+                verificationReport: $result->verificationReport,
             );
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
+            $report = $check->verificationReport ?? null;
+            if ($report !== null && str_starts_with($exception->getMessage(), 'INSTALLATION_FAILED')) {
+                $report = new VerificationReport($report->certificateInfo, [...$report->checks,
+                    new VerificationCheck('Installation', false, $exception->getMessage(), \App\Certificate\CertificateStatus::INSTALLATION_FAILED, 'installation')], $report->liveCertificateInfo);
+            }
             return new WatchItemResult(
                 domain: $website->domain(),
                 status: 'error',
                 message: $exception->getMessage(),
                 failed: true,
+                verificationReport: $report,
             );
         }
     }
@@ -167,17 +175,6 @@ final readonly class WebsiteWatcher
     private function isMissingCertificate(
         RenewCheckResult $check,
     ): bool {
-        if ($check->status !== 'invalid-local-certificate') {
-            return false;
-        }
-
-        $message = mb_strtolower($check->message);
-
-        return str_contains($message, 'datei wurde nicht gefunden')
-            || str_contains($message, 'zertifikat wurde nicht gefunden')
-            || str_contains(
-                $message,
-                'zertifikatsdatei wurde nicht gefunden',
-            );
+        return 'CERTIFICATE_MISSING' === $check->status;
     }
 }

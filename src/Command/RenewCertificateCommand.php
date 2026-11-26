@@ -390,6 +390,9 @@ final class RenewCertificateCommand extends Command
                     continue;
                 }
 
+                if (!$check->renewalRequired && null !== $check->verificationReport && !$check->verificationReport->successful()) {
+                    throw new \RuntimeException($check->message);
+                }
                 if ($dryRun) {
                     if ($check->renewalRequired) {
                         ++$wouldRenew;
