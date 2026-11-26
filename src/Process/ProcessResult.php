@@ -8,6 +8,7 @@ final readonly class ProcessResult
         public int $exitCode,
         public string $output,
         public string $errorOutput,
+        public bool $skipped = false,
     ) {
     }
 

@@ -5,13 +5,13 @@ namespace App\Acme;
 use App\Certificate\Certificate;
 use App\Config\Configuration;
 use App\Process\ProcessResult;
-use App\Process\ProcessRunner;
+use App\Process\ProcessRunnerInterface;
 
 final readonly class AcmeManager
 {
     public function __construct(
         private Configuration $configuration,
-        private ProcessRunner $processRunner,
+        private ProcessRunnerInterface $processRunner,
     ) {
     }
 
@@ -19,10 +19,15 @@ final readonly class AcmeManager
         Certificate $certificate,
         bool $force = false,
     ): ProcessResult {
-        $result = $this->processRunner->run(
-            command: $this->issueCommand($certificate, $force),
-            timeout: null,
-        );
+        try {
+            $result = $this->processRunner->run(
+                command: $this->issueCommand($certificate, $force),
+                timeout: 900,
+                liveOutput: false,
+            );
+        } catch (\Throwable) {
+            throw new \RuntimeException('ACME-Ausstellung fehlgeschlagen oder Zeitlimit erreicht; keine automatische Wiederholung.');
+        }
 
         if ($result->successful()) {
             return $result;
@@ -32,14 +37,10 @@ final readonly class AcmeManager
             $result->contains('Domains not changed')
             && $this->certificateFilesExist($certificate)
         ) {
-            echo \PHP_EOL;
-            echo 'Hinweis: Das vorhandene Zertifikat ist noch gültig.'.\PHP_EOL;
-            echo 'acme.sh hat die Ausstellung übersprungen.'.\PHP_EOL;
-
-            return $result;
+            return new ProcessResult(0, 'acme.sh hat die Ausstellung übersprungen; vorhandene Dateien müssen validiert werden.', '', skipped: true);
         }
 
-        throw new \RuntimeException(\sprintf("Die Zertifikatsausstellung ist fehlgeschlagen.\n%s", $result->combinedOutput()));
+        throw new \RuntimeException(\sprintf("Die Zertifikatsausstellung ist fehlgeschlagen.\n%s", 'Details aus Sicherheitsgründen unterdrückt; ACME-Fehler/Rate-Limit prüfen.'));
     }
 
     public function install(Certificate $certificate): ProcessResult
@@ -47,10 +48,11 @@ final readonly class AcmeManager
         $result = $this->processRunner->run(
             command: $this->installCommand($certificate),
             timeout: 120,
+            liveOutput: false,
         );
 
         if (!$result->successful()) {
-            throw new \RuntimeException(\sprintf("Die Zertifikatsinstallation ist fehlgeschlagen.\n%s", $result->combinedOutput()));
+            throw new \RuntimeException(\sprintf("Die Zertifikatsinstallation ist fehlgeschlagen.\n%s", 'Details aus Sicherheitsgründen unterdrückt; ACME-Fehler/Rate-Limit prüfen.'));
         }
 
         return $result;
@@ -65,6 +67,8 @@ final readonly class AcmeManager
     ): array {
         $command = [
             $this->configuration->acmeExecutable,
+            '--home', $this->configuration->acmeHome,
+            '--config-home', $this->configuration->acmeConfigHome,
             '--issue',
             '--server',
             $certificate->certificateAuthority->value,

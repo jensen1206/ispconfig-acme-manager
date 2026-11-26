@@ -36,6 +36,10 @@ final class DoctorCommand extends Command
             $hasErrors = false;
 
             foreach ($checks as $check) {
+                if ($check->warning) {
+                    $io->warning($check->name.': '.$check->message);
+                    continue;
+                }
                 if ($check->successful) {
                     $io->writeln(\sprintf(
                         '<info>✔</info> <comment>%s</comment>: %s',

@@ -23,14 +23,8 @@ final readonly class NameserverChecker
         [$resolvedZone, $nameservers] = $this->resolveNameservers($domain);
 
         if ([] === $nameservers) {
-            return new NameserverCheckResult(
-                requestedDomain: $domain,
-                resolvedZone: $resolvedZone,
-                nameservers: [],
-                managed: false,
-            );
+            throw new \RuntimeException('CONNECTION_ERROR: Keine autoritativen Nameserver ermittelt.');
         }
-
         $managedNameservers = $this->configuration->managedNameservers;
 
         /*
@@ -60,6 +54,19 @@ final readonly class NameserverChecker
         $result = $this->check($hostname);
 
         if ($result->managed) {
+            $challenge = '_acme-challenge.'.$hostname->baseDomain();
+            $aliases = dns_get_record($challenge, \DNS_CNAME);
+            if (false === $aliases) {
+                throw new \RuntimeException('CONNECTION_ERROR: Challenge-Delegation nicht prüfbar.');
+            }
+            if ([] !== $aliases) {
+                throw new \RuntimeException('EXTERNAL_DNS: CNAME-Delegation der ACME-Challenge wird nicht automatisch bearbeitet.');
+            }
+            [, $servers] = $this->resolveNameservers($challenge);
+            if ([] === $servers || [] !== array_diff($servers, $this->configuration->managedNameservers)) {
+                throw new \RuntimeException('EXTERNAL_DNS: Challenge-Zone nicht vollständig verwaltet.');
+            }
+
             return;
         }
 

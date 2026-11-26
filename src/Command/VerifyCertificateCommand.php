@@ -59,38 +59,41 @@ final class VerifyCertificateCommand extends Command
 
             $io->title('ISPConfig Zertifikatsprüfung');
 
-            $io->section('Lokales Zertifikat');
+            $io->writeln($report->summary());
+            if (null !== $localInfo) {
+                $io->section('Lokales Zertifikat');
 
-            $io->definitionList(
-                ['Common Name' => $localInfo->commonName],
-                ['Aussteller' => $localInfo->issuer],
-                [
-                    'Gültig ab' => $localInfo->validFrom->format('d.m.Y H:i:s'),
-                ],
-                [
-                    'Gültig bis' => $localInfo->validUntil->format('d.m.Y H:i:s'),
-                ],
-                [
-                    'Restlaufzeit' => \sprintf(
-                        '%d Tage',
-                        $localInfo->daysUntilExpiration(),
-                    ),
-                ],
-                ['SHA-256' => $localInfo->fingerprint],
-            );
-
-            $io->section('Lokale Subject Alternative Names');
-
-            if ([] === $localInfo->subjectAlternativeNames) {
-                $io->warning(
-                    'Das lokale Zertifikat enthält keine Subject Alternative Names.',
+                $io->definitionList(
+                    ['Common Name' => $localInfo->commonName],
+                    ['Aussteller' => $localInfo->issuer],
+                    [
+                        'Gültig ab' => $localInfo->validFrom->format('d.m.Y H:i:s'),
+                    ],
+                    [
+                        'Gültig bis' => $localInfo->validUntil->format('d.m.Y H:i:s'),
+                    ],
+                    [
+                        'Restlaufzeit' => \sprintf(
+                            '%d Tage',
+                            $localInfo->daysUntilExpiration(),
+                        ),
+                    ],
+                    ['SHA-256' => $localInfo->fingerprint],
+                    ['Seriennummer' => $localInfo->serialNumber],
                 );
-            } else {
-                $io->listing(
-                    $localInfo->subjectAlternativeNames,
-                );
+
+                $io->section('Lokale Subject Alternative Names');
+
+                if ([] === $localInfo->subjectAlternativeNames) {
+                    $io->warning(
+                        'Das lokale Zertifikat enthält keine Subject Alternative Names.',
+                    );
+                } else {
+                    $io->listing(
+                        $localInfo->subjectAlternativeNames,
+                    );
+                }
             }
-
             if (null !== $liveInfo) {
                 $io->section('Live-Zertifikat');
 
@@ -110,6 +113,7 @@ final class VerifyCertificateCommand extends Command
                         ),
                     ],
                     ['SHA-256' => $liveInfo->fingerprint],
+                    ['Seriennummer' => $liveInfo->serialNumber],
                 );
 
                 $io->section('Live Subject Alternative Names');
@@ -133,7 +137,7 @@ final class VerifyCertificateCommand extends Command
                     $check->successful
                         ? '<info>✔</info>'
                         : '<error>✘</error>',
-                    $check->name,
+                    $check->scope.': '.$check->status->value.' '.$check->name,
                     $check->message,
                 ));
             }

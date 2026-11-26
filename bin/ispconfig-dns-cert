@@ -45,7 +45,7 @@ $websiteRepository = new WebsiteRepository(
     apiClient: $apiClient,
 );
 
-$certificateFactory = new CertificateFactory();
+$certificateFactory = new CertificateFactory($configuration);
 
 $acmeManager = new AcmeManager(
     configuration: $configuration,
@@ -80,22 +80,29 @@ $certificateVerificationService = new CertificateVerificationService(
     certificateFactory: $certificateFactory,
     certificateReader: $certificateReader,
     liveCertificateReader: $liveCertificateReader,
+    validator: new \App\Certificate\CertificateValidator($processRunner, HttpClient::create(), $configuration->networkTimeout, $configuration->caFile),
+    configuration: $configuration,
 );
 
 $nameserverChecker = new NameserverChecker(
     configuration: $configuration,
 );
 
+$guard = new \App\Service\OperationGuard($configuration);
+$installation = new \App\Service\CertificateInstallationService($websiteUpdater, $certificateVerificationService, $configuration, $guard);
+
 $certificateService = new CertificateService(
+    installation: $installation,
+    guard: $guard,
     websiteRepository: $websiteRepository,
     certificateFactory: $certificateFactory,
     acmeManager: $acmeManager,
-    websiteUpdater: $websiteUpdater,
     verificationService: $certificateVerificationService,
     nameserverChecker: $nameserverChecker,
 );
 
 $renewService = new RenewService(
+    configuration: $configuration,
     websiteRepository: $websiteRepository,
     certificateService: $certificateService,
     verificationService: $certificateVerificationService,
@@ -109,7 +116,7 @@ $websiteWatcher = new WebsiteWatcher(
 
 $application = new Application(
     name: 'ISPConfig DNS Certificate Manager',
-    version: '0.3.0',
+    version: '1.0.2',
 );
 
 $application->add(
@@ -143,6 +150,7 @@ $application->add(
 
 $application->add(
     new UpdateWebsiteCommand(
+        installation: $installation,
         websiteRepository: $websiteRepository,
         certificateFactory: $certificateFactory,
         websiteUpdater: $websiteUpdater,

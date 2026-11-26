@@ -20,7 +20,18 @@ final readonly class WebsiteUpdater
      */
     public function buildCertificateParameters(
         Certificate $certificate,
+        bool $acmeSource = true,
     ): array {
+        if (!$acmeSource) {
+            $info = (new \App\Certificate\CertificateReader())->read($certificate->certificatePath);
+
+            return [
+                'ssl' => 'y', 'ssl_letsencrypt' => 'n', 'ssl_domain' => $certificate->domain(),
+                'ssl_cert' => $info->pem, 'ssl_bundle' => $info->chainPem,
+                'ssl_key' => $this->readRequiredFile($certificate->keyPath), 'ssl_action' => 'save',
+            ];
+        }
+
         return [
             'ssl' => 'y',
             'ssl_letsencrypt' => 'n',
@@ -47,6 +58,7 @@ final readonly class WebsiteUpdater
     public function saveCertificate(
         Website $website,
         Certificate $certificate,
+        bool $acmeSource = true,
     ): mixed {
         $clientId = $this->clientIdResolver->resolve($website);
 
@@ -75,7 +87,7 @@ final readonly class WebsiteUpdater
         }
 
         foreach (
-            $this->buildCertificateParameters($certificate) as $field => $value
+            $this->buildCertificateParameters($certificate, $acmeSource) as $field => $value
         ) {
             $parameters[$field] = $value;
         }
@@ -85,10 +97,14 @@ final readonly class WebsiteUpdater
             domainId: $website->id,
             parameters: $parameters,
         );
+        if ($result === false || $result === null) {
+            throw new \RuntimeException('INSTALLATION_FAILED: ISPConfig hat das Update nicht bestätigt.');
+        }
 
         $this->assertCertificateWasSaved(
             website: $website,
             certificate: $certificate,
+            acmeSource: $acmeSource,
         );
 
         return $result;
@@ -97,6 +113,7 @@ final readonly class WebsiteUpdater
     private function assertCertificateWasSaved(
         Website $website,
         Certificate $certificate,
+        bool $acmeSource,
     ): void {
         $updated = $this->websiteRepository->findRawById(
             $website->id,
@@ -123,6 +140,13 @@ final readonly class WebsiteUpdater
 
         if (!\is_string($certificateContent) || '' === trim($certificateContent)) {
             throw new \RuntimeException('ISPConfig hat das Zertifikat nicht gespeichert.');
+        }
+
+        $expected = $this->readRequiredFile($acmeSource ? $certificate->acmeCertificatePath() : $certificate->certificatePath);
+        $expectedFingerprint = openssl_x509_fingerprint($expected, 'sha256');
+        $actualFingerprint = openssl_x509_fingerprint($certificateContent, 'sha256');
+        if (false === $expectedFingerprint || $actualFingerprint !== $expectedFingerprint) {
+            throw new \RuntimeException('INSTALLATION_FAILED: Gespeichertes Zertifikat weicht ab.');
         }
 
         if (!\is_string($bundleContent) || '' === trim($bundleContent)) {

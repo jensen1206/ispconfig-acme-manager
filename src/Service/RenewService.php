@@ -1,15 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Service;
 
-use App\Domain\Hostname;
 use App\Dns\NameserverChecker;
+use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
-use InvalidArgumentException;
-use Throwable;
 
 final readonly class RenewService
 {
@@ -18,6 +14,7 @@ final readonly class RenewService
         private CertificateService $certificateService,
         private CertificateVerificationService $verificationService,
         private NameserverChecker $nameserverChecker,
+        private \App\Config\Configuration $configuration,
     ) {
     }
 
@@ -57,66 +54,10 @@ final readonly class RenewService
             );
         }
 
-        try {
-            /*
-             * Für die Erneuerungsentscheidung wird ausschließlich das
-             * lokale Zertifikat geprüft.
-             *
-             * Netzwerk- oder TLS-Probleme dürfen keine automatische
-             * ACME-Neuausstellung auslösen.
-             */
-            $verificationReport = $this->verificationService->verifyWebsite(
-                website: $website,
-                includeLiveCertificate: false,
-            );
-        } catch (Throwable $exception) {
-            return new RenewCheckResult(
-                renewalRequired: true,
-                status: 'invalid-local-certificate',
-                message: sprintf(
-                    'Das lokale Zertifikat konnte nicht geprüft werden: %s',
-                    $exception->getMessage(),
-                ),
-            );
-        }
+        $report = $this->verificationService->verifyWebsite($website, true, false, $renewBeforeDays);
+        $source = $this->verificationService->verifyWebsite($website, false, true, $renewBeforeDays);
 
-        $remainingDays = $verificationReport
-            ->certificateInfo
-            ->daysUntilExpiration();
-
-        if (!$verificationReport->successful()) {
-            return new RenewCheckResult(
-                renewalRequired: true,
-                status: 'invalid-local-certificate',
-                message: 'Mindestens eine lokale Zertifikatsprüfung ist fehlgeschlagen.',
-                remainingDays: $remainingDays,
-                verificationReport: $verificationReport,
-            );
-        }
-
-        if ($remainingDays <= $renewBeforeDays) {
-            return new RenewCheckResult(
-                renewalRequired: true,
-                status: 'expiring',
-                message: sprintf(
-                    'Nur noch %d Tage gültig. Erneuerung erforderlich.',
-                    $remainingDays,
-                ),
-                remainingDays: $remainingDays,
-                verificationReport: $verificationReport,
-            );
-        }
-
-        return new RenewCheckResult(
-            renewalRequired: false,
-            status: 'valid',
-            message: sprintf(
-                'Keine Erneuerung erforderlich. Noch %d Tage gültig.',
-                $remainingDays,
-            ),
-            remainingDays: $remainingDays,
-            verificationReport: $verificationReport,
-        );
+        return RenewalPolicy::decide($report, $source, $renewBeforeDays, $this->configuration->automaticRepair);
     }
 
     public function renew(
@@ -157,7 +98,16 @@ final readonly class RenewService
             renewBeforeDays: $renewBeforeDays,
         );
 
+        if ('reinstall' === $checkResult->status) {
+            return new RenewResult(true, 'Vorhandenes Zertifikat erneut installiert. '.$checkResult->message,
+                verificationReport: $this->certificateService->reinstall($website), reinstalled: true);
+        }
+
         if (!$checkResult->renewalRequired) {
+            if (null !== $checkResult->verificationReport && !$checkResult->verificationReport->successful()) {
+                throw new \RuntimeException($checkResult->message);
+            }
+
             return new RenewResult(
                 renewed: false,
                 message: $checkResult->message,
@@ -169,27 +119,28 @@ final readonly class RenewService
          * Ist das lokale Zertifikat defekt oder fehlt vollständig, darf
          * acme.sh nicht einfach das vorhandene Zertifikat überspringen.
          */
-        $forceIssue = $checkResult->status === 'invalid-local-certificate';
+        $source = $this->verificationService->verifyWebsite($website, false, true);
+        $forceIssue = \App\Certificate\CertificateStatus::REVOKED === $source->status('local');
 
         $issueResult = $this->certificateService->issueWebsite(
             website: $website,
             force: $forceIssue,
+            renewBeforeDays: $renewBeforeDays,
         );
 
         return new RenewResult(
             renewed: true,
-            message: $checkResult->message,
+            message: ($issueResult->issued ? 'Neues Zertifikat ausgestellt. ' : 'Vorhandenes Zertifikat installiert; keine Neuausstellung. ').$checkResult->message,
             issueResult: $issueResult,
             verificationReport: $issueResult->verificationReport,
+            reinstalled: !$issueResult->issued,
         );
     }
 
     private function validateRenewBeforeDays(int $renewBeforeDays): void
     {
         if ($renewBeforeDays < 0) {
-            throw new InvalidArgumentException(
-                'Die Anzahl der Tage darf nicht negativ sein.',
-            );
+            throw new \InvalidArgumentException('Die Anzahl der Tage darf nicht negativ sein.');
         }
     }
 }

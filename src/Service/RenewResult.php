@@ -9,6 +9,7 @@ final readonly class RenewResult
         public string $message,
         public ?CertificateIssueResult $issueResult = null,
         public ?VerificationReport $verificationReport = null,
+        public bool $reinstalled = false,
     ) {
     }
 }

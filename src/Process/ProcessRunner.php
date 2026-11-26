@@ -4,7 +4,7 @@ namespace App\Process;
 
 use Symfony\Component\Process\Process;
 
-final readonly class ProcessRunner
+final readonly class ProcessRunner implements ProcessRunnerInterface
 {
     /**
      * @param list<string> $command

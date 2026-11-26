@@ -13,7 +13,9 @@ A modern PHP CLI application for automatic ACME certificate management on ISPCon
 
 ## Status
 
-**Stable Release Candidate (v1.0.0)**
+**Version 1.0.2**
+
+Upgrade: set `local_server_id` before mutation. Automatic repair is opt-in (`automatic_repair`). See [configuration, safety policy and verification limits](README.de.md). The manager now validates CRLs and confirms installation through live TLS polling. Cleanup settings remain read-only/manual; no production integration test has been performed.
 
 ## Features
 

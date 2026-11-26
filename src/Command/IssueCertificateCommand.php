@@ -156,9 +156,12 @@ final class IssueCertificateCommand extends Command
 
             $certificate = $result->plan->certificate;
             $certificateInfo = $result->verificationReport->certificateInfo;
+            if (null === $certificateInfo) {
+                return Command::FAILURE;
+            }
 
             $io->success([
-                'Zertifikat wurde erfolgreich ausgestellt, installiert und geprüft.',
+                $result->issued ? 'Zertifikat wurde erfolgreich ausgestellt, installiert und geprüft.' : 'Vorhandenes Zertifikat wurde installiert und geprüft; keine Neuausstellung.',
                 \sprintf('Domain: %s', $certificate->domain()),
                 \sprintf('Key: %s', $certificate->keyPath),
                 \sprintf(

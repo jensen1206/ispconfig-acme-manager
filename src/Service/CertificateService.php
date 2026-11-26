@@ -8,7 +8,6 @@ use App\Dns\NameserverChecker;
 use App\Domain\Hostname;
 use App\ISPConfig\Website;
 use App\ISPConfig\WebsiteRepository;
-use App\ISPConfig\WebsiteUpdater;
 
 final readonly class CertificateService
 {
@@ -16,9 +15,11 @@ final readonly class CertificateService
         private WebsiteRepository $websiteRepository,
         private CertificateFactory $certificateFactory,
         private AcmeManager $acmeManager,
-        private WebsiteUpdater $websiteUpdater,
+
         private CertificateVerificationService $verificationService,
         private NameserverChecker $nameserverChecker,
+        private CertificateInstallationService $installation,
+        private OperationGuard $guard,
     ) {
     }
 
@@ -37,7 +38,7 @@ final readonly class CertificateService
             website: $website,
             certificate: $certificate,
             issueCommand: $this->acmeManager->issueCommand($certificate),
-            installCommand: $this->acmeManager->installCommand($certificate),
+            installCommand: ['php', 'bin/ispconfig-dns-cert', 'update', $website->domain(), '--yes'],
         );
     }
 
@@ -54,38 +55,25 @@ final readonly class CertificateService
     public function issueWebsite(
         Website $website,
         bool $force = false,
+        int $renewBeforeDays = 30,
     ): CertificateIssueResult {
-        $this->nameserverChecker->assertManaged(
-            $website->primaryHostname,
-        );
-
+        $this->verificationService->assertLocal($website);
+        foreach ($website->hostnames as $hostname) {
+            $this->nameserverChecker->assertManaged($hostname);
+        }
         $plan = $this->previewWebsite($website);
-
-        $issueResult = $this->acmeManager->issue(
-            certificate: $plan->certificate,
-            force: $force,
-        );
-
-        $installResult = $this->acmeManager->install(
-            certificate: $plan->certificate,
-        );
-
-        $updateResult = $this->websiteUpdater->saveCertificate(
-            website: $plan->website,
-            certificate: $plan->certificate,
-        );
-
-        /*
-         * Direkt nach Installation und Apache-Reload wird nur der lokale
-         * Zertifikatszustand geprüft.
-         *
-         * Eine sofortige Live-TLS-Prüfung kann kurzzeitig fehlschlagen,
-         * obwohl das Zertifikat korrekt installiert wurde.
-         */
-        $verificationReport = $this->verificationService->verifyWebsite(
-            website: $plan->website,
-            includeLiveCertificate: false,
-        );
+        $source = $this->verificationService->verifyWebsite($website, false, true);
+        if (!$force && \in_array($source->status('local'), [\App\Certificate\CertificateStatus::REVOCATION_UNKNOWN,
+            \App\Certificate\CertificateStatus::CERTIFICATE_INVALID], true)) {
+            throw new \RuntimeException('ACME-Bestand nicht sicher prüfbar; keine automatische Neuausstellung. '.$source->summary());
+        }
+        $issueResult = new \App\Process\ProcessResult(0, 'Vorhandenes Zertifikat verwendet.', '', skipped: true);
+        if ($force || !$source->scopeSuccessful('local') || ($source->certificateInfo?->daysUntilExpiration() ?? 0) <= $renewBeforeDays) {
+            $issueResult = $this->guard->run($website, 'issue', fn () => $this->acmeManager->issue($plan->certificate, $force));
+        }
+        $verificationReport = $this->installation->install($website, $plan->certificate);
+        $installResult = new \App\Process\ProcessResult(0, 'Installation per ISPConfig bestätigt.', '');
+        $updateResult = true;
 
         return new CertificateIssueResult(
             plan: $plan,
@@ -93,7 +81,18 @@ final readonly class CertificateService
             installResult: $installResult,
             updateResult: $updateResult,
             verificationReport: $verificationReport,
+            issued: !$issueResult->skipped,
         );
+    }
+
+    public function reinstall(Website $website): VerificationReport
+    {
+        $this->verificationService->assertLocal($website);
+        $certificate = $this->certificateFactory->fromWebsite($website);
+        $local = $this->verificationService->verifyWebsite($website, false);
+        $useLocal = is_file($certificate->certificatePath) && is_file($certificate->keyPath) && $local->scopeSuccessful('local');
+
+        return $this->installation->install($website, $certificate, !$useLocal);
     }
 
     /**

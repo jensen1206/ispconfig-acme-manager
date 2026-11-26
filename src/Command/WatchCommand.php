@@ -1,13 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Command;
 
 use App\Console\OutputMode;
 use App\Domain\Hostname;
 use App\ISPConfig\ApiClient;
-use App\Service\WatchItemResult;
 use App\Service\WatchReport;
 use App\Service\WebsiteWatcher;
 use Symfony\Component\Console\Command\Command;
@@ -16,7 +13,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Throwable;
 
 final class WatchCommand extends Command
 {
@@ -82,7 +78,7 @@ final class WatchCommand extends Command
             $cron = (bool) $input->getOption('cron');
             $skipConfirmation = (bool) $input->getOption('yes');
 
-            if ($domain !== null && !is_string($domain)) {
+            if (null !== $domain && !\is_string($domain)) {
                 $io->error(
                     'Das Argument "domain" muss eine Zeichenkette sein.',
                 );
@@ -90,11 +86,11 @@ final class WatchCommand extends Command
                 return Command::INVALID;
             }
 
-            $normalizedDomain = is_string($domain)
+            $normalizedDomain = \is_string($domain)
                 ? trim($domain)
                 : '';
 
-            if (!is_string($days) || !ctype_digit($days)) {
+            if (!\is_string($days) || !ctype_digit($days)) {
                 $io->error(
                     'Die Option "--days" muss eine nicht negative ganze Zahl sein.',
                 );
@@ -102,7 +98,7 @@ final class WatchCommand extends Command
                 return Command::INVALID;
             }
 
-            if ($all && $normalizedDomain !== '') {
+            if ($all && '' !== $normalizedDomain) {
                 $io->error(
                     'Eine Domain und die Option "--all" dürfen nicht gleichzeitig verwendet werden.',
                 );
@@ -110,7 +106,7 @@ final class WatchCommand extends Command
                 return Command::INVALID;
             }
 
-            if (!$all && $normalizedDomain === '') {
+            if (!$all && '' === $normalizedDomain) {
                 $io->error(
                     'Gib eine Domain an oder verwende die Option "--all".',
                 );
@@ -148,7 +144,7 @@ final class WatchCommand extends Command
                 ? OutputMode::Cron
                 : OutputMode::Interactive;
 
-            if ($outputMode === OutputMode::Interactive) {
+            if (OutputMode::Interactive === $outputMode) {
                 $this->writeHeader(
                     io: $io,
                     domain: $normalizedDomain,
@@ -163,10 +159,10 @@ final class WatchCommand extends Command
                     && !$io->confirm(
                         $all
                             ? 'Alle aktiven Websites prüfen und Zertifikate bei Bedarf ausstellen oder erneuern?'
-                            : sprintf(
-                            'Die Website "%s" jetzt prüfen und das Zertifikat bei Bedarf ausstellen oder erneuern?',
-                            $normalizedDomain,
-                        ),
+                            : \sprintf(
+                                'Die Website "%s" jetzt prüfen und das Zertifikat bei Bedarf ausstellen oder erneuern?',
+                                $normalizedDomain,
+                            ),
                         false,
                     )
                 ) {
@@ -187,7 +183,7 @@ final class WatchCommand extends Command
                     dryRun: $dryRun,
                 );
 
-            if ($outputMode === OutputMode::Cron) {
+            if (OutputMode::Cron === $outputMode) {
                 return $this->writeCronOutput(
                     io: $io,
                     report: $report,
@@ -199,7 +195,7 @@ final class WatchCommand extends Command
                 report: $report,
                 dryRun: $dryRun,
             );
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;
@@ -228,7 +224,7 @@ final class WatchCommand extends Command
                     : $domain,
             ],
             [
-                'Erneuerungsgrenze' => sprintf(
+                'Erneuerungsgrenze' => \sprintf(
                     '%d Tage',
                     $renewBeforeDays,
                 ),
@@ -252,6 +248,9 @@ final class WatchCommand extends Command
                     dryRun: $dryRun,
                 ),
                 'message' => $item->message,
+                'local' => $item->verificationReport?->status('local')->value ?? '-',
+                'public' => $item->verificationReport?->status('public')->value ?? '-',
+                'installation' => $item->verificationReport?->status('installation')->value ?? '-',
                 'priority' => $this->statusPriority(
                     $item->status,
                 ),
@@ -264,7 +263,7 @@ final class WatchCommand extends Command
                 $priorityComparison =
                     $left['priority'] <=> $right['priority'];
 
-                if ($priorityComparison !== 0) {
+                if (0 !== $priorityComparison) {
                     return $priorityComparison;
                 }
 
@@ -276,10 +275,13 @@ final class WatchCommand extends Command
         );
 
         $io->table(
-            ['Domain', 'Status', 'Ergebnis'],
+            ['Domain', 'Lokal', 'Öffentlich', 'Installation', 'Aktion/Status', 'Ergebnis'],
             array_map(
                 static fn (array $row): array => [
                     $row['domain'],
+                    $row['local'],
+                    $row['public'],
+                    $row['installation'],
                     $row['status'],
                     $row['message'],
                 ],
@@ -295,29 +297,25 @@ final class WatchCommand extends Command
             [
                 $dryRun
                     ? 'Würden ausgestellt'
-                    : 'Neu ausgestellt'
-                => (string) $report->issuedCount(),
+                    : 'Neu ausgestellt' => (string) $report->issuedCount(),
             ],
             [
                 $dryRun
                     ? 'Würden erneuert'
-                    : 'Erneuert'
-                => (string) $report->renewedCount(),
+                    : 'Erneuert' => (string) $report->renewedCount(),
             ],
             [
-                'SSL deaktiviert' =>
-                    (string) $report->sslDisabledCount(),
+                'SSL deaktiviert' => (string) $report->sslDisabledCount(),
             ],
             [
-                'Externes DNS' =>
-                    (string) $report->externalDnsCount(),
+                'Externes DNS' => (string) $report->externalDnsCount(),
             ],
             ['Fehler' => (string) $report->failedCount()],
             ['Laufzeit' => $this->formatDuration($report->duration)],
         );
 
         if (!$report->successful()) {
-            $io->error(sprintf(
+            $io->error(\sprintf(
                 '%d Website(s) konnten nicht verarbeitet werden.',
                 $report->failedCount(),
             ));
@@ -345,8 +343,12 @@ final class WatchCommand extends Command
         WatchReport $report,
     ): int {
         foreach ($report->items as $item) {
-            if ($item->status === 'issued') {
-                $io->writeln(sprintf(
+            if ('reinstalled' === $item->status) {
+                $io->writeln('[REINSTALLED] '.$item->domain.': '.$item->message);
+                continue;
+            }
+            if ('issued' === $item->status) {
+                $io->writeln(\sprintf(
                     '[ISSUED] %s: %s',
                     $item->domain,
                     $item->message,
@@ -355,8 +357,8 @@ final class WatchCommand extends Command
                 continue;
             }
 
-            if ($item->status === 'renewed') {
-                $io->writeln(sprintf(
+            if ('renewed' === $item->status) {
+                $io->writeln(\sprintf(
                     '[RENEWED] %s: %s',
                     $item->domain,
                     $item->message,
@@ -366,7 +368,7 @@ final class WatchCommand extends Command
             }
 
             if ($item->failed) {
-                $io->writeln(sprintf(
+                $io->writeln(\sprintf(
                     '<error>[ERROR] %s: %s</error>',
                     $item->domain,
                     $item->message,
@@ -374,7 +376,7 @@ final class WatchCommand extends Command
             }
         }
 
-        $io->writeln(sprintf(
+        $io->writeln(\sprintf(
             '[SUMMARY] checked=%d valid=%d issued=%d renewed=%d ssl_disabled=%d external_dns=%d failed=%d duration=%s',
             $report->checkedCount(),
             $report->validCount(),
@@ -396,6 +398,7 @@ final class WatchCommand extends Command
         bool $dryRun,
     ): string {
         return match ($status) {
+            'reinstalled' => $dryRun ? '<comment>würde erneut installiert</comment>' : '<info>erneut installiert</info>',
             'valid' => '<info>✔ gültig</info>',
             'issued' => $dryRun
                 ? '<fg=yellow>⚠ würde ausgestellt</>'
@@ -424,13 +427,13 @@ final class WatchCommand extends Command
     private function formatDuration(float $seconds): string
     {
         if ($seconds < 60) {
-            return sprintf('%.2f s', $seconds);
+            return \sprintf('%.2f s', $seconds);
         }
 
         $minutes = intdiv((int) $seconds, 60);
         $remainingSeconds = (int) $seconds % 60;
 
-        return sprintf(
+        return \sprintf(
             '%d min %d s',
             $minutes,
             $remainingSeconds,

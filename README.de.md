@@ -1,313 +1,75 @@
-# ISPConfig ACME Manager
+# ISPConfig ACME Manager 1.0.2
 
-Ein modernes PHP-CLI-Tool zur Verwaltung von ACME-Zertifikaten für ISPConfig.
+PHP-CLI für DNS-01-Zertifikate mit acme.sh und der ISPConfig Remote API. PHP 8.2+, PHP-OpenSSL, OpenSSL CLI und die bestehenden Composer-Abhängigkeiten werden benötigt.
 
-Der Fokus liegt auf einer vollständig automatisierten DNS-01-Zertifikatsverwaltung, ohne Änderungen am ISPConfig-Core vorzunehmen.
+## Upgrade von 0.3.0
 
-Alle Änderungen erfolgen ausschließlich über die offizielle ISPConfig Remote API und bleiben dadurch updatefähig.
+Vor dem ersten schreibenden Aufruf in `/etc/ispconfig-dns-cert.php` `local_server_id` auf die ISPConfig-ID des ausführenden Webservers setzen. Der Standard `0` sperrt lokale Prüfungen und Änderungen. Fremde Server werden nur öffentlich geprüft; lokale Pfade werden nicht als fehlende Zertifikate interpretiert. Auf jedem Webserver mit eigener Konfiguration ausführen.
 
-> **Projektstatus:** Entwicklung (v0.1)
+`src/Config/example.php` enthält alle Optionen. Vorhandene Schlüssel und CLI-Optionen bleiben erhalten. Keine Servereinstellung wird automatisch geändert.
 
----
+| Option | Standard | Zweck |
+|---|---|---|
+| `local_server_id` | `0` | Explizite lokale Serverzuordnung |
+| `installation_timeout` | `180` | Wartefrist nach API-Aktualisierung, Sekunden |
+| `poll_interval` | `5` | Abstand zwischen Prüfungen |
+| `network_timeout` | `15` | Zeitbudget einer Zertifikatsprüfung/TLS-Verbindung |
+| `retry_cooldown` | `86400` | Mindestabstand gleicher Aktionen, Sekunden |
+| `state_directory` | `/var/lib/ispconfig-acme-manager` | Sperren und Versuchstimestamps, ohne Schlüssel/Zugangsdaten |
+| `acme_home` | `/root/.acme.sh` | acme.sh-Programmverzeichnis |
+| `acme_config_home` | `/root/.acme.sh` | Account- und Zertifikatsbestand |
+| `automatic_repair` | `false` | Wiederinstallation bei Abweichungen ausdrücklich freigeben |
+| `vhost_directory` | `/etc/apache2/sites-available` | Lesende Prüfung neuer `.vhost.err`-Dateien |
+| `ca_file` | Systemstandard | Optionaler OpenSSL-Vertrauensspeicher |
 
-# Ziele
+`automatic_repair` nur aktivieren, wenn öffentliches TLS auf diesem Webserver terminiert. Bei CDN, Loadbalancer oder TLS-Reverse-Proxy deaktiviert lassen. Proxy- und Apache-Direktiven werden aus dem aktuellen API-Datensatz unverändert übernommen. Gleichzeitige administrative Website-Änderungen während eines vollständigen API-Updates sollten vermieden werden.
 
-Dieses Projekt ersetzt die herkömmliche HTTP-01-Zertifikatsausstellung durch eine moderne DNS-01-Lösung.
+## Befehle
 
-Dadurch werden unter anderem folgende Probleme vermieden:
-
-- Probleme mit der Secondary Validation von Let's Encrypt
-- HTTP-Weiterleitungen
-- Reverse Proxys
-- Firewalls
-- Mehrere Webserver
-- CDN-Probleme
-
-Zusätzlich ermöglicht DNS-01:
-
-- Wildcard-Zertifikate
-- Vollautomatische Verlängerungen
-- Unterstützung verschiedener Zertifizierungsstellen
-
----
-
-# Funktionen
-
-## Bereits implementiert
-
-- Symfony Console
-- ISPConfig Remote API
-- Website-Erkennung
-- DNS-01 Zertifikatsplanung
-- Let's Encrypt Unterstützung
-- ACME-Befehlsvorschau
-- Doctor-Funktion
-- PHPStan Level Max
-- Rector
-- PHPUnit
-- PHP-CS-Fixer
-
----
-
-## Geplant
-
-- Zertifikat automatisch ausstellen
-- Zertifikat automatisch installieren
-- SSL automatisch in ISPConfig speichern
-- Apache automatisch neu laden
-- Zertifikat verifizieren
-- Zertifikate erneuern
-- Alle Zertifikate erneuern
-- Wildcard-Zertifikate
-- ZeroSSL
-- Google Trust Services
-- SSL.com
-- Buypass
-
----
-
-# Voraussetzungen
-
-- PHP 8.2 oder neuer
-- Composer
-- ISPConfig 3.3+
-- acme.sh
-- Apache
-- DNS-Zonen in ISPConfig
-
----
-
-# Installation
-
-Repository klonen
-
-```bash
-git clone https://github.com/harz-web24/ispconfig-acme.git
-```
-
-Abhängigkeiten installieren
-
-```bash
-composer install
-```
-
-Konfiguration erstellen
-
-```bash
-cp config/example.php /etc/ispconfig-dns-cert.php
-chmod 600 /etc/ispconfig-dns-cert.php
-```
-
----
-
-# Konfiguration
-
-```php
-<?php
-
-return [
-
-    'api_url' => 'https://server:8080/remote/json.php',
-
-    'username' => 'acme-manager',
-
-    'password' => 'passwort',
-
-    'acme' => '/root/.acme.sh/acme.sh',
-
-    'dns_provider' => 'dns_ispconfig',
-
-    'dns_sleep' => 120,
-
-];
-```
-
-## ISPConfig Remote API
-
-The Remote API must be enabled.
-
-Example endpoint:
-
-https://server.example.com:8080/remote/json.php
-
-Create a dedicated Remote User with the required permissions:
-
-- Websites Domain Functions
-- DNS Zone Functions
-- DNS TXT Functions (if required)
-
-Do **not** use your ISPConfig administrator account.
-
----
-
-# Befehle
-
-Verfügbare Befehle
-
-```bash
-php bin/ispconfig-dns-cert list
-```
-
-Vorschau
-
-```bash
-php bin/ispconfig-dns-cert preview example.de
-```
-
-Zertifikat ausstellen
-
-```bash
-php bin/ispconfig-dns-cert issue example.de
-```
-
-System prüfen
-
-```bash
+```sh
 php bin/ispconfig-dns-cert doctor
+php bin/ispconfig-dns-cert preview example.org
+php bin/ispconfig-dns-cert verify example.org
+php bin/ispconfig-dns-cert watch --all --dry-run
+php bin/ispconfig-dns-cert watch --all --cron
+php bin/ispconfig-dns-cert issue example.org --yes
+php bin/ispconfig-dns-cert update example.org --yes
+php bin/ispconfig-dns-cert renew --all --days 30 --yes
+php bin/ispconfig-dns-cert update-debug example.org
 ```
 
----
+`verify` zeigt lokale und öffentliche Befunde getrennt. Geprüft werden Zeitfenster, SAN-Abdeckung einschließlich Wildcards, Schlüsselzuordnung, Vertrauenskette/Serverzweck, CRL, Seriennummer und SHA256-Fingerprint. Konkrete Hostnamen werden mit SNI abgefragt; Wildcards werden nicht als Netzwerkadresse benutzt. Pro Hostname wird die vom Resolver ausgewählte Verbindung geprüft, keine vollständige Loadbalancer-Inventarisierung.
 
-# Architektur
+Statuswerte: `VALID`, `EXPIRING`, `EXPIRED`, `REVOKED`, `REVOCATION_UNKNOWN`, `HOSTNAME_MISMATCH`, `CERTIFICATE_MISMATCH`, `CERTIFICATE_MISSING`, `HTTPS_UNAVAILABLE`, `INSTALLATION_FAILED`, `EXTERNAL_DNS`, `CONNECTION_ERROR`. Zusätzlich `CERTIFICATE_INVALID` für fehlerhafte/noch nicht gültige Zertifikate und `NOT_CHECKED` für nicht ausgeführte Teilprüfungen. Mehrere Fehler bleiben im Prüfbericht erhalten.
 
-```
-Symfony Console
-        │
-        ▼
-CertificateService
-        │
-        ▼
-WebsiteRepository
-        │
-        ▼
-ISPConfig API
-        │
-        ▼
-Website
-        │
-        ▼
-CertificateFactory
-        │
-        ▼
-Certificate
-        │
-        ▼
-AcmeManager
-        │
-        ▼
-ProcessRunner
-        │
-        ▼
-acme.sh
-```
+CRL-Prüfung betrifft das Leaf-Zertifikat. OpenSSL prüft Signatur, Zuordnung und Gültigkeit der CRL. Nicht erreichbare, fehlende oder ungültige CRLs ergeben **REVOCATION_UNKNOWN**, niemals REVOKED. Es gibt keinen OCSP-Fallback. CRLs werden nur von öffentlichen IPv4-Zielen über HTTP(S), ohne Redirects, mit festgelegter DNS-Auflösung und Größenlimit geladen. IPv6-only-CRL-Ziele bleiben unbekannt. Ein kurzer Cache existiert nur im Prozess; OpenSSL prüft die CRL-Gültigkeit bei jeder Verwendung erneut.
 
----
+`issue` und `update` melden Erfolg erst, wenn das erwartete Zertifikat öffentlich verifiziert wurde. Es wird kein manueller Apache-Reload mehr vor der ISPConfig-Verarbeitung ausgeführt. Ohne verifizierte Jobstatus-API dient TLS-Polling als Bestätigung der wirksamen Installation; es beweist keinen bestimmten internen Jobabschluss. Neue lesbare `.vhost.err`, `.crt.err`, `.key.err` führen zum Fehler. Fehlende Dateirechte begrenzen diese Zusatzdiagnose. Betriebssystem-DNS-Auflösung kann außerhalb der kontrollierten Prozess-/HTTP-Zeitlimits liegen.
 
-# Projektstruktur
+`renew` und `watch` erkennen Widerruf unabhängig von der Restlaufzeit. Installationsprobleme verwenden nach Möglichkeit vorhandene gültige Zertifikate. Unbekannter Widerrufsstatus und reine Verbindungsfehler lösen keine Neuausstellung aus. Externe DNS-Zonen und CNAME-Challenge-Delegationen werden nicht automatisch bearbeitet.
 
-```
-src/
+Versuche werden vor der Aktion gespeichert. Fehlversuche, Rate-Limit-Antworten und Prozessabbrüche unterliegen derselben Sperrfrist. `--force` umgeht diese Sperre nicht. Installation eines anderen Fingerprints wird separat behandelt. Der Manager verändert keine ACME-Cronjobs oder alten Reload-Hooks; bestehende acme.sh-Automatisierung muss beim Upgrade auf konkurrierende Aktionen geprüft werden.
 
-Acme/
-Certificate/
-Command/
-Config/
-Domain/
-ISPConfig/
-Process/
-Service/
-```
+Dry-Run liest und prüft, führt aber keine Ausstellung, Installation, API-Änderung oder persistente Aktionsänderung aus. Temporäre öffentliche Zertifikats-/CRL-Dateien werden für OpenSSL benötigt und anschließend entfernt.
 
----
+Exit-Codes: `0` erfolgreicher Lauf/keine Aktion, `1` Prüf- oder Installationsfehler einschließlich erforderlicher unbekannter Widerrufsprüfung, `2` ungültige CLI-Optionen. `EXPIRING` allein ist bei `verify` kein Fehler; die verbleibende Laufzeit steuert `renew`/`watch`.
 
-# Entwicklung
+## Doctor und Cleanup
 
-Formatter
+Doctor prüft OpenSSL-CRL-Unterstützung und die lokale Serverzuordnung. Derzeit ist keine versionsübergreifend verifizierte Cleanup-Leseschnittstelle integriert: Doctor meldet dies ausdrücklich als Warnung und zeigt die manuell pro Webserver zu prüfenden Werte `le_auto_cleanup=n`, `le_revoke_before_delete=n`. `le_delete_on_site_remove` separat bewerten. Es werden keine Serverkonfigurationen oder Datenbanken geschrieben und keine Session-IDs ausgegeben.
 
-```bash
-composer fix
-```
+## Separater ACME-Bestand
 
-Syntaxprüfung
+Ein dediziertes `acme_config_home` ist für neue Installationen sinnvoll. Das Standardverzeichnis bleibt aus Kompatibilitätsgründen erhalten. Keine automatische Migration: Accounts, DNS-Zugangsdaten, vorhandene Zertifikate, Rechte und Renewal-Hooks müssen gemeinsam übertragen/geprüft werden. Ein anderer Pfad ist keine Garantie gegen ISPConfig-Cleanup.
 
-```bash
+## Entwicklung
+
+```sh
+composer install
+composer validate --strict
 composer lint
-```
-
-PHPStan
-
-```bash
 composer stan
-```
-
-Tests
-
-```bash
 composer test
 ```
 
-Rector
-
-```bash
-composer rector
-```
-
----
-
-# Roadmap
-
-## Version 0.1
-
-- Grundgerüst
-- Vorschau
-- Doctor
-- ISPConfig API
-
-## Version 0.2
-
-- Zertifikate ausstellen
-- WebsiteUpdater
-- Verify
-
-## Version 0.3
-
-- Renew
-- Renew All
-- Logging
-
-## Version 0.4
-
-- ZeroSSL
-- Google Trust
-- SSL.com
-- Buypass
-
----
-
-# Projektphilosophie
-
-Dieses Projekt verfolgt drei grundlegende Ziele:
-
-- Keine Änderungen am ISPConfig-Core
-- Keine direkten Datenbankänderungen
-- Vollständige Updatefähigkeit
-
-Alle Änderungen erfolgen ausschließlich über die offizielle ISPConfig Remote API.
-
-Dadurch bleibt das Projekt auch nach zukünftigen ISPConfig-Versionen wartbar.
-
----
-
-# Maintainer
-
-**Jens Wiecker**
-
-Full Stack Developer, PHP & Symfony Enthusiast
-
-🌐 https://wiecker.eu
-
----
-
-# License
-
-MIT License
+Tests erzeugen ausschließlich eine temporäre lokale Test-CA, Testschlüssel und CRLs. HTTP/API/TLS-Endpunkte werden simuliert; keine produktive ACME-Ausstellung oder Widerrufe. Die Tests erfordern das OpenSSL-CLI im PATH. Vor Produktiveinsatz zusätzlich einen isolierten Debian-12-/ISPConfig-Abnahmetest durchführen.
