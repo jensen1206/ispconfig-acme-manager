@@ -116,7 +116,7 @@ $websiteWatcher = new WebsiteWatcher(
 
 $application = new Application(
     name: 'ISPConfig DNS Certificate Manager',
-    version: '1.0.4',
+    version: '1.0.5',
 );
 
 $application->add(new \App\Command\RenewDashboardCertificateCommand(

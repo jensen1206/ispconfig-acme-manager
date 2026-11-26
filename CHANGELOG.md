@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format follows Keep a Changelog.
 
-## [Unreleased]
+## [1.0.5] - 2026-11-26
 
 ### Fixed
 - Allow ISPConfig PHP-handler conditional blocks unrelated to TLS when locating the VHost certificate pair; continue rejecting conditional certificate mappings, includes, macros and malformed conditional blocks.
