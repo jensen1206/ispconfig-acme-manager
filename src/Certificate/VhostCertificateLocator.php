@@ -16,10 +16,12 @@ final class VhostCertificateLocator
                 throw new \RuntimeException('VHost-Zertifikatszuordnung nicht lesbar.');
             }
             // This deliberately handles only explicit paths in generated TLS blocks.
-            // Includes/macros/conditional configuration need Apache-aware resolution.
-            if (preg_match('/^\s*(?:Include\S*|Define|Use|<\/?(?:IfDefine|If|ElseIf|Else|Macro)\b)/mi', $content)) {
+            // Includes/macros need Apache-aware resolution. Request conditions
+            // unrelated to TLS do not change the explicit certificate mapping.
+            if (preg_match('/^\s*(?:Include\S*|Define|Use|<\/?Macro\b)/mi', $content)) {
                 throw new \RuntimeException('VHost enthält dynamische Konfiguration; Zertifikatszuordnung nicht eindeutig.');
             }
+            $this->assertUnconditionalTls($content);
             preg_match_all('/<VirtualHost\s+([^>]+)>(.*?)<\/VirtualHost\s*>/si', $content, $blocks, \PREG_SET_ORDER);
             $pairs = [];
             foreach ($blocks as $block) {
@@ -46,6 +48,31 @@ final class VhostCertificateLocator
         }
 
         return [$certificatePath, $keyPath];
+    }
+
+    private function assertUnconditionalTls(string $content): void
+    {
+        $conditions = [];
+        foreach (explode("\n", $content) as $line) {
+            if (preg_match('~^\s*<(/?)(IfDefine|If|ElseIf|Else)\b~i', $line)) {
+                if (!preg_match('~^\s*<(/?)(IfDefine|If|ElseIf|Else)\b[^>]*>\s*(?:#.*)?$~i', $line, $match)) {
+                    throw new \RuntimeException('Bedingter VHost-Block nicht eindeutig lesbar.');
+                }
+                $name = strtolower($match[2]);
+                if ('/' === $match[1]) {
+                    if (array_pop($conditions) !== $name) {
+                        throw new \RuntimeException('Bedingte VHost-Blöcke nicht korrekt geschlossen.');
+                    }
+                } else {
+                    $conditions[] = $name;
+                }
+            } elseif ([] !== $conditions && preg_match('~^\s*(?:SSLCertificate\S*\b|</?VirtualHost\b)~i', $line)) {
+                throw new \RuntimeException('Bedingte TLS-Dateizuordnung im VHost; keine automatische Auswahl.');
+            }
+        }
+        if ([] !== $conditions) {
+            throw new \RuntimeException('Bedingte VHost-Blöcke nicht korrekt geschlossen.');
+        }
     }
 
     private function directive(string $block, string $name): string
